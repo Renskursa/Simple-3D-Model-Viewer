@@ -5,9 +5,9 @@
   "type": "module",
   "homepage": "https://renskursa.github.io/Simple-3D-Model-Viewer",
   "scripts": {
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist",
     "dev": "vite",
+    "predeploy": "deno task build",
+    "deploy": "gh-pages -d dist",
     "build": "vite build",
     "preview": "vite preview"
   },

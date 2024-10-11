@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: #242424; /* Ensure the background is dark */
+  background-color: #242424;
 }
 .modal {
   display: flex;
