@@ -58,6 +58,9 @@ const loadModel = (file) => {
     const blob = new Blob([data], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
 
+    // Clear the scene before loading a new model
+    scene.meshes.forEach(mesh => mesh.dispose());
+
     const extension = file.name.split('.').pop().toLowerCase();
     SceneLoader.Append("", url, scene, (newScene) => {
       console.log(`${extension.toUpperCase()} model loaded:`, newScene);
