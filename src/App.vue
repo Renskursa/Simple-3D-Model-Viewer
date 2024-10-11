@@ -228,13 +228,15 @@ onBeforeUnmount(() => {
   position: absolute;
   top: 10px;
   right: 10px;
-  background-color: rgba(46, 46, 46, 0.438);
+  background-color: rgba(58, 58, 58, 0.438);
   padding: 10px;
   border-radius: 10px;
+  border: 4px #000000 groove;
   z-index: 10;
 }
 .setting {
   margin-bottom: 10px;
+  user-select: none;
 }
 .setting label {
   display: block;
@@ -264,8 +266,10 @@ onBeforeUnmount(() => {
 }
 .sub-settings {
   margin-top: 10px;
+  margin-bottom: 5px;
+  height: 255px;
   padding: 10px;
-  background-color: rgba(46, 46, 46, 0.438);
+  background-color: rgba(65, 65, 65, 0.495);
   border-radius: 10px;
 }
 .slider {
