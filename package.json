@@ -1,9 +1,9 @@
 {
-  "name": "test-project",
+  "name": "3d-model-viewer",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
-  "homepage": "https://<username>.github.io/<repository-name>",
+  "homepage": "https://renskursa.github.io/Simple-3D-Model-Viewer",
   "scripts": {
     "dev": "vite",
     "deploy": "gh-pages -d build",
@@ -13,7 +13,6 @@
   "dependencies": {
     "@babylonjs/core": "^7.29.0",
     "@babylonjs/loaders": "^7.29.0",
-    "gh-pages": "^6.2.0",
     "lodash-es": "^4.17.21",
     "three": "^0.169.0",
     "three-fbxloader-offical": "^1.0.0",
