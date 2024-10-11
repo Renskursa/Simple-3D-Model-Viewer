@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "homepage": "https://renskursa.github.io/Simple-3D-Model-Viewer",
+  "homepage": "https://renskursa.me/Simple-3D-Model-Viewer",
   "scripts": {
     "dev": "vite",
     "predeploy": "deno task build",
