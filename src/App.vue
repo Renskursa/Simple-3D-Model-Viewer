@@ -75,7 +75,7 @@ const loadModel = (file) => {
 
 const handleFileChange = (event) => {
   const file = event.target.files[0];
-  if (file && (file.name.endsWith('.stl') || file.name.endsWith('.glb') || file.name.endsWith('.gltf'))) {
+  if (file && (file.name.endsWith('.stl') || file.name.endsWith('.glb'))) {
     loadModel(file);
   }
 };
@@ -115,7 +115,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div id="app">
-    <input type="file" accept=".stl,.glb,.gltf" @change="handleFileChange" class="file-input" />
+    <input type="file" accept=".stl,.glb" @change="handleFileChange" class="file-input" />
     <canvas ref="canvasRef" class="canvas-container"></canvas>
     <div v-if="showErrorModal" class="modal">
       <div class="modal-content">
