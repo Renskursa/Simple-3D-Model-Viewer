@@ -229,8 +229,11 @@ onBeforeUnmount(() => {
   padding-right: 1px
 }
 
+canvas {
+  outline: none;
+}
+
 .canvas-container {
-  user-select: none;
   position: absolute;
   top: 0;
   left: 0;
