@@ -230,6 +230,7 @@ onBeforeUnmount(() => {
 }
 
 .canvas-container {
+  user-select: none;
   position: absolute;
   top: 0;
   left: 0;
@@ -338,6 +339,7 @@ onBeforeUnmount(() => {
 }
 .slider {
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   height: 8px;
   background: #a16c6c; /* Light-Red */
