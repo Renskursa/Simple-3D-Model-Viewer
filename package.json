@@ -6,7 +6,7 @@
   "homepage": "https://renskursa.me/Simple-3D-Model-Viewer",
   "scripts": {
     "dev": "vite",
-    "predeploy": "deno task build",
+    "predeploy": "npm run build",
     "deploy": "gh-pages -d dist",
     "build": "vite build",
     "preview": "vite preview"
