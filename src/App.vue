@@ -5,6 +5,7 @@ import '@babylonjs/loaders/stl';
 import '@babylonjs/loaders/glTF';
 import { ref, onMounted, onBeforeUnmount, reactive } from 'vue';
 
+const selectedFile = ref(null);
 const canvasRef = ref(null);
 const errorMessage = ref('');
 const showErrorModal = ref(false);
@@ -54,14 +55,13 @@ const handleResize = () => {
 const loadModel = (file) => {
   const reader = new FileReader();
   reader.onload = (event) => {
-    const data = event.target.result;
-    const blob = new Blob([data], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
+    const arrayBuffer = event.target.result;
+    const url = URL.createObjectURL(new Blob([arrayBuffer]));
+    const extension = file.name.split('.').pop();
 
     // Clear the scene before loading a new model
     scene.meshes.forEach(mesh => mesh.dispose());
 
-    const extension = file.name.split('.').pop().toLowerCase();
     SceneLoader.Append("", url, scene, (newScene) => {
       console.log(`${extension.toUpperCase()} model loaded:`, newScene);
     }, null, (scene, message, exception) => {
@@ -76,10 +76,14 @@ const loadModel = (file) => {
 const handleFileChange = (event) => {
   const file = event.target.files[0];
   if (file && (file.name.endsWith('.stl') || file.name.endsWith('.glb'))) {
+    selectedFile.value = file;
     loadModel(file);
+    console.log(selectedFile.value);
+  } else if (file) {
+    errorMessage.value = 'Unsupported file format. Please select an STL or GLB file.';
+    showErrorModal.value = true;
   }
 };
-
 const updateLightIntensity = (event) => {
   settings.lightIntensity = event.target.value;
   light.intensity = settings.lightIntensity;
@@ -115,63 +119,116 @@ onBeforeUnmount(() => {
 
 <template>
   <div id="app">
-    <input type="file" accept=".stl,.glb" @change="handleFileChange" class="file-input" />
+    <div class="top-right-container">
+      <label for="file-input" class="custom-file-input">
+        <div class="file-label-content">
+          <img src="@/assets/download-icon.svg" alt="Download Icon" class="download-icon" />
+          <input type="file" id="file-input" class="file-input" @change="handleFileChange" accept=".stl,.glb" />
+          <span v-if="selectedFile">Selected file: {{ selectedFile.name }}</span>
+          <span v-else>Choose a file...</span>
+        </div>
+      </label>
+      <div class="settings-panel">
+        <div class="setting">
+          <label for="backgroundColor">Background Color</label>
+          <input type="color" id="backgroundColor" v-model="settings.backgroundColor" @input="updateBackgroundColor" />
+          <div class="setting-value">{{ settings.backgroundColor }}</div>
+        </div>
+        <div class="setting">
+          <label for="lightIntensity">Light Intensity</label>
+          <input class="slider" type="range" id="lightIntensity" min="0" max="2" step="0.1" v-model="settings.lightIntensity" @input="updateLightIntensity" />
+          <div class="setting-value">{{ settings.lightIntensity }}</div>
+          <button class="toggle-button" @click="showLightSettings = !showLightSettings">Advanced Light Settings</button>
+        </div>
+        <div v-if="showLightSettings" class="sub-settings">
+          <div class="setting">
+            <label for="lightDirectionX">Light Direction X</label>
+            <input class="slider" type="range" id="lightDirectionX" min="-1" max="1" step="0.1" v-model="settings.lightDirectionX" @input="updateLightDirection('X', $event.target.value)" />
+            <div class="setting-value">{{ settings.lightDirectionX }}</div>
+          </div>
+          <div class="setting">
+            <label for="lightDirectionY">Light Direction Y</label>
+            <input class="slider" type="range" id="lightDirectionY" min="-1" max="1" step="0.1" v-model="settings.lightDirectionY" @input="updateLightDirection('Y', $event.target.value)" />
+            <div class="setting-value">{{ settings.lightDirectionY }}</div>
+          </div>
+          <div class="setting">
+            <label for="lightDirectionZ">Light Direction Z</label>
+            <input class="slider" type="range" id="lightDirectionZ" min="-1" max="1" step="0.1" v-model="settings.lightDirectionZ" @input="updateLightDirection('Z', $event.target.value)" />
+            <div class="setting-value">{{ settings.lightDirectionZ }}</div>
+          </div>
+        </div>
+        <div class="setting">
+          <label for="cameraSpeed">Camera Speed</label>
+          <input class="slider" type="range" id="cameraSpeed" min="0.1" max="10" step="0.1" v-model="settings.cameraSpeed" @input="updateCameraSpeed" />
+          <div class="setting-value">{{ settings.cameraSpeed }}</div>
+        </div>
+        <div class="setting">
+          <label for="cameraRadius">Camera Distance</label>
+          <div class="setting-value">{{ settings.cameraRadius }}</div>
+        </div>
+      </div>
+    </div>
     <canvas ref="canvasRef" class="canvas-container"></canvas>
     <div v-if="showErrorModal" class="modal">
       <div class="modal-content">
         <span class="close" @click="showErrorModal = false">&times;</span>
+        <p class="error-warning">Error Occured:</p>
         <p class="error-text">{{ errorMessage }}</p>
-      </div>
-    </div>
-    <div class="settings-panel">
-      <div class="setting">
-        <label for="lightIntensity">Light Intensity</label>
-        <input class="slider" type="range" id="lightIntensity" min="0" max="2" step="0.1" v-model="settings.lightIntensity" @input="updateLightIntensity" />
-        <div class="setting-value">{{ settings.lightIntensity }}</div>
-        <button class="toggle-button" @click="showLightSettings = !showLightSettings">Advanced Light Settings</button>
-      </div>
-      <div v-if="showLightSettings" class="sub-settings">
-        <div class="setting">
-          <label for="lightDirectionX">Light Direction X</label>
-          <input class="slider" type="range" id="lightDirectionX" min="-1" max="1" step="0.1" v-model="settings.lightDirectionX" @input="updateLightDirection('X', $event.target.value)" />
-          <div class="setting-value">{{ settings.lightDirectionX }}</div>
-        </div>
-        <div class="setting">
-          <label for="lightDirectionY">Light Direction Y</label>
-          <input class="slider" type="range" id="lightDirectionY" min="-1" max="1" step="0.1" v-model="settings.lightDirectionY" @input="updateLightDirection('Y', $event.target.value)" />
-          <div class="setting-value">{{ settings.lightDirectionY }}</div>
-        </div>
-        <div class="setting">
-          <label for="lightDirectionZ">Light Direction Z</label>
-          <input class="slider" type="range" id="lightDirectionZ" min="-1" max="1" step="0.1" v-model="settings.lightDirectionZ" @input="updateLightDirection('Z', $event.target.value)" />
-          <div class="setting-value">{{ settings.lightDirectionZ }}</div>
-        </div>
-      </div>
-      <div class="setting">
-        <label for="cameraSpeed">Camera Speed</label>
-        <input class="slider"  type="range" id="cameraSpeed" min="0.1" max="10" step="0.1" v-model="settings.cameraSpeed" @input="updateCameraSpeed" />
-        <div class="setting-value">{{ settings.cameraSpeed }}</div>
-      </div>
-      <div class="setting">
-        <label for="cameraRadius">Camera Distance</label>
-        <div class="setting-value">{{ settings.cameraRadius }}</div>
-      </div>
-      <div class="setting">
-        <label for="backgroundColor">Background Color</label>
-        <input type="color" id="backgroundColor" v-model="settings.backgroundColor" @input="updateBackgroundColor" />
-        <div class="setting-value">{{ settings.backgroundColor }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.file-input {
+.top-right-container {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 15px;
+  right: 15px;
   z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
+
+.file-input {
+  display: none;
+}
+
+.custom-file-input {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid #6a0dad;
+  border-radius: 5px;
+  background-color: #6a0dad;
+  color: white;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.file-label-content {
+  display: flex;
+  align-items: center;
+}
+
+.custom-file-input span {
+  margin-right: 1px;
+}
+
+.custom-file-input p {
+  margin: 0;
+}
+
+.custom-file-input:hover {
+  background-color: #5a0cad;
+}
+
+.download-icon {
+  width: 32px;
+  height: 32px;
+  padding-right: 1px
+}
+
 .canvas-container {
   position: absolute;
   top: 0;
@@ -180,6 +237,7 @@ onBeforeUnmount(() => {
   height: 100%;
   background-color: #242424;
 }
+
 .modal {
   display: flex;
   justify-content: center;
@@ -195,18 +253,23 @@ onBeforeUnmount(() => {
 }
 .modal-content {
   background-color: #fefefe;
-  margin: auto;
   padding: 20px;
   border: 1px solid #888;
-  width: 80%;
-  max-width: 500px;
-  text-align: center;
+  border-radius: 30px;
+  max-width: 80%;
+  height: auto;
+  width: auto;
+  margin: 0 auto;
+  position: relative;
 }
 .close {
   color: #000000;
-  float: right;
   font-size: 28px;
   font-weight: bold;
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin-right: 15px;
 }
 .close:hover,
 .close:focus {
@@ -218,7 +281,6 @@ onBeforeUnmount(() => {
   color: red;
   font-size: 20px;
   font-weight: bold;
-  margin-bottom: 10px;
 }
 .error-text {
   color: #000000;
@@ -226,8 +288,9 @@ onBeforeUnmount(() => {
 }
 .settings-panel {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 55px;
+  right: 0;
+  width: 200px;
   background-color: rgba(58, 58, 58, 0.438);
   padding: 10px;
   border-radius: 10px;
@@ -255,18 +318,19 @@ onBeforeUnmount(() => {
 .toggle-button {
   margin-top: 10px;
   padding: 5px 10px;
-  background-color: #614caf;
+  width: 100%;
+  background-color: #614caf; /* Purple */
   color: white;
   border: none;
   border-radius: 5px;
   cursor: pointer;
 }
 .toggle-button:hover {
-  background-color: #43337d;
+  background-color: #43337d; /* Dark-Purple */
 }
 .sub-settings {
   margin-top: 10px;
-  margin-bottom: 5px;
+  margin-bottom: 15px;
   height: 255px;
   padding: 10px;
   background-color: rgba(65, 65, 65, 0.495);
@@ -276,7 +340,7 @@ onBeforeUnmount(() => {
   -webkit-appearance: none;
   width: 100%;
   height: 8px;
-  background: #4CAF50; /* Green */
+  background: #a16c6c; /* Light-Red */
   outline: none;
   opacity: 0.7;
   transition: opacity .2s;
@@ -289,16 +353,16 @@ onBeforeUnmount(() => {
 .slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 15px;
+  width: 10px;
   height: 15px;
-  background: #ffffff; /* Green */
+  background: #ff0f0f; /* Red */
   cursor: pointer;
 }
 
 .slider::-moz-range-thumb {
   width: 15px;
   height: 15px;
-  background: #5a5e5a; /* Green */
+  background: #5a5e5a; /* Gray */
   cursor: pointer;
 }
 </style>
