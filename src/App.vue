@@ -209,6 +209,7 @@ onBeforeUnmount(() => {
 .file-label-content {
   display: flex;
   align-items: center;
+  user-select: none;
 }
 
 .custom-file-input span {
