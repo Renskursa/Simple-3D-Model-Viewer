@@ -1,18 +1,24 @@
 <script setup>
 import './style.css'
-import { Engine, Scene, ArcRotateCamera, HemisphericLight, Vector3, SceneLoader, StandardMaterial, Color3 } from '@babylonjs/core';
+import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/stl';
 import '@babylonjs/loaders/glTF';
+import { GLTF2Export } from '@babylonjs/serializers';
 import { ref, onMounted, onBeforeUnmount, reactive } from 'vue';
+import exampleModel from '@/assets/example.stl';
 
 const selectedFile = ref(null);
 const canvasRef = ref(null);
 const errorMessage = ref('');
 const showErrorModal = ref(false);
 const showLightSettings = ref(false);
+const paintColor = ref('#ff0000'); // Default paint color
+
 const settings = reactive({
   lightIntensity: 0.7,
-  cameraRadius: 10,
+  cameraRadius: 35.71,
+  startX: -15,
+  startY: 10,
   backgroundColor: '#242424',
   lightDirectionX: 1,
   lightDirectionY: 1,
@@ -20,22 +26,31 @@ const settings = reactive({
   cameraSpeed: 1,
 });
 
-let engine, scene, camera, light;
+let engine, scene, camera, light, highlightMaterial, glowLayer;
 const MIN_CAMERA_RADIUS = 1.5;
+let previousHighlightMesh = null;
 
 const initBabylonJS = () => {
-  engine = new Engine(canvasRef.value, true);
-  scene = new Scene(engine);
-  scene.clearColor = Color3.FromHexString(settings.backgroundColor);
+  engine = new BABYLON.Engine(canvasRef.value, true);
+  scene = new BABYLON.Scene(engine);
+  scene.clearColor = BABYLON.Color3.FromHexString(settings.backgroundColor);
 
-  camera = new ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2, settings.cameraRadius, Vector3.Zero(), scene);
+  camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2, settings.cameraRadius, BABYLON.Vector3.Zero(), scene);
   camera.attachControl(canvasRef.value, true);
   camera.wheelPrecision = 50 / settings.cameraSpeed;
   camera.angularSensibilityX = 1000 / settings.cameraSpeed;
   camera.angularSensibilityY = 1000 / settings.cameraSpeed;
+  camera.setPosition(new BABYLON.Vector3(settings.startX, settings.startY, settings.cameraRadius));
 
-  light = new HemisphericLight("light", new Vector3(settings.lightDirectionX, settings.lightDirectionY, settings.lightDirectionZ), scene);
+  light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(settings.lightDirectionX, settings.lightDirectionY, settings.lightDirectionZ), scene);
   light.intensity = settings.lightIntensity;
+
+  highlightMaterial = new BABYLON.StandardMaterial("highlightMaterial", scene);
+  highlightMaterial.diffuseColor = BABYLON.Color3.Magenta();
+  highlightMaterial.emissiveColor = BABYLON.Color3.Magenta(); // Set emissive color for glow effect
+
+  glowLayer = new BABYLON.GlowLayer("glowLayer", scene);
+  glowLayer.intensity = 0.4;
 
   engine.runRenderLoop(() => {
     if (camera.radius < MIN_CAMERA_RADIUS) {
@@ -46,44 +61,45 @@ const initBabylonJS = () => {
   });
 
   window.addEventListener('resize', handleResize);
+  scene.onPointerMove = handlePointerMove;
+  scene.onPointerDown = handlePointerDown;
 };
 
 const handleResize = () => {
   engine.resize();
 };
 
-const loadModel = (file) => {
-  const reader = new FileReader();
-  reader.onload = (event) => {
-    const arrayBuffer = event.target.result;
-    const url = URL.createObjectURL(new Blob([arrayBuffer]));
-    const extension = file.name.split('.').pop();
+const loadModel = (url, extension) => {
+  // Clear the scene before loading a new model
+  scene.meshes.forEach(mesh => mesh.dispose());
 
-    // Clear the scene before loading a new model
-    scene.meshes.forEach(mesh => mesh.dispose());
-
-    SceneLoader.Append("", url, scene, (newScene) => {
-      console.log(`${extension.toUpperCase()} model loaded:`, newScene);
-    }, null, (scene, message, exception) => {
-      console.error(message, exception);
-      errorMessage.value = message;
-      showErrorModal.value = true;
-    }, `.${extension}`);
-  };
-  reader.readAsArrayBuffer(file);
+  BABYLON.SceneLoader.Append("", url, scene, (newScene) => {
+    console.log(`${extension.toUpperCase()} model loaded:`, newScene);
+  }, null, (scene, message, exception) => {
+    console.error(message, exception);
+    errorMessage.value = message;
+    showErrorModal.value = true;
+  }, `.${extension}`);
 };
 
 const handleFileChange = (event) => {
   const file = event.target.files[0];
   if (file && (file.name.endsWith('.stl') || file.name.endsWith('.glb'))) {
     selectedFile.value = file;
-    loadModel(file);
-    console.log(selectedFile.value);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const arrayBuffer = event.target.result;
+      const url = URL.createObjectURL(new Blob([arrayBuffer]));
+      const extension = file.name.split('.').pop();
+      loadModel(url, extension);
+    };
+    reader.readAsArrayBuffer(file);
   } else if (file) {
     errorMessage.value = 'Unsupported file format. Please select an STL or GLB file.';
     showErrorModal.value = true;
   }
 };
+
 const updateLightIntensity = (event) => {
   settings.lightIntensity = event.target.value;
   light.intensity = settings.lightIntensity;
@@ -91,12 +107,12 @@ const updateLightIntensity = (event) => {
 
 const updateBackgroundColor = (event) => {
   settings.backgroundColor = event.target.value;
-  scene.clearColor = Color3.FromHexString(settings.backgroundColor);
+  scene.clearColor = BABYLON.Color3.FromHexString(settings.backgroundColor);
 };
 
 const updateLightDirection = (axis, value) => {
   settings[`lightDirection${axis}`] = value;
-  light.direction = new Vector3(settings.lightDirectionX, settings.lightDirectionY, settings.lightDirectionZ);
+  light.direction = new BABYLON.Vector3(settings.lightDirectionX, settings.lightDirectionY, settings.lightDirectionZ);
 };
 
 const updateCameraSpeed = (event) => {
@@ -106,8 +122,119 @@ const updateCameraSpeed = (event) => {
   camera.angularSensibilityY = 1000 / settings.cameraSpeed;
 };
 
+const handlePointerMove = (event) => {
+  // Print current location and rotation
+  console.log('Pointer Location:', scene.pointerX, scene.pointerY);
+  console.log('Camera Position:', camera.position);
+
+  const pickResult = scene.pick(scene.pointerX, scene.pointerY);
+  if (pickResult.hit) {
+    const pickedMesh = pickResult.pickedMesh;
+    const pickedFaceId = pickResult.faceId;
+
+    // Remove previous highlight if
+    if (previousHighlightMesh) {
+      glowLayer.removeIncludedOnlyMesh(previousHighlightMesh);
+      previousHighlightMesh.dispose();
+    }
+
+    const indices = pickedMesh.getIndices();
+    const vertexData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+    const faceIndices = [
+      indices[pickedFaceId * 3],
+      indices[pickedFaceId * 3 + 1],
+      indices[pickedFaceId * 3 + 2]
+    ];
+
+    // Create a new mesh for the highlighted face
+    const highlightMesh = new BABYLON.Mesh("highlightMesh", scene);
+    highlightMesh.isHighlightMesh = true; // Mark as non-exportable
+
+    const highlightVertexData = new BABYLON.VertexData();
+    highlightVertexData.positions = [
+      vertexData[faceIndices[0] * 3], vertexData[faceIndices[0] * 3 + 1], vertexData[faceIndices[0] * 3 + 2],
+      vertexData[faceIndices[1] * 3], vertexData[faceIndices[1] * 3 + 1], vertexData[faceIndices[1] * 3 + 2],
+      vertexData[faceIndices[2] * 3], vertexData[faceIndices[2] * 3 + 1], vertexData[faceIndices[2] * 3 + 2]
+    ];
+    highlightVertexData.indices = [0, 1, 2];
+    highlightVertexData.applyToMesh(highlightMesh);
+    highlightMesh.material = highlightMaterial;
+    glowLayer.addIncludedOnlyMesh(highlightMesh);
+    previousHighlightMesh = highlightMesh;
+  } else {
+    // Remove highlight if no mesh is picked
+    if (previousHighlightMesh) {
+      glowLayer.removeIncludedOnlyMesh(previousHighlightMesh);
+      previousHighlightMesh.dispose();
+      previousHighlightMesh = null;
+    }
+  }
+};
+
+const handlePointerDown = (event) => {
+  const pickResult = scene.pick(scene.pointerX, scene.pointerY);
+  if (pickResult.hit) {
+    const pickedMesh = pickResult.pickedMesh;
+    const pickedFaceId = pickResult.faceId;
+    console.log('Picked mesh:', pickedMesh);
+    console.log('Picked face ID:', pickedFaceId);
+
+    const indices = pickedMesh.getIndices();
+    const vertexData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+    const faceIndices = [
+      indices[pickedFaceId * 3],
+      indices[pickedFaceId * 3 + 1],
+      indices[pickedFaceId * 3 + 2]
+    ];
+
+    // Create a new mesh for the selected face
+    const faceMesh = new BABYLON.Mesh("faceMesh", scene);
+    const faceVertexData = new BABYLON.VertexData();
+    faceVertexData.positions = [
+      vertexData[faceIndices[0] * 3], vertexData[faceIndices[0] * 3 + 1], vertexData[faceIndices[0] * 3 + 2],
+      vertexData[faceIndices[1] * 3], vertexData[faceIndices[1] * 3 + 1], vertexData[faceIndices[1] * 3 + 2],
+      vertexData[faceIndices[2] * 3], vertexData[faceIndices[2] * 3 + 1], vertexData[faceIndices[2] * 3 + 2]
+    ];
+    faceVertexData.indices = [0, 1, 2];
+    faceVertexData.applyToMesh(faceMesh);
+
+    if (event.button === 0) { // Left mouse button is pressed
+      // Apply paint color to the selected face
+      const paintMaterial = new BABYLON.StandardMaterial("paintMaterial", scene);
+      paintMaterial.diffuseColor = BABYLON.Color3.FromHexString(paintColor.value);
+      faceMesh.material = paintMaterial;
+    } else if (event.button === 2) { // Right mouse button is pressed
+      // Reset to original material
+      const originalMaterial = new BABYLON.StandardMaterial("originalMaterial", scene);
+      originalMaterial.diffuseColor = BABYLON.Color3.White(); // Assuming the original color is white
+      faceMesh.material = originalMaterial;
+    }
+  }
+};
+
+const exportModel = (format = 'glb') => {
+  const originalMeshes = scene.meshes.filter(mesh => !mesh.isHighlightMesh);
+  const exportScene = new BABYLON.Scene(engine);
+  originalMeshes.forEach(mesh => {
+    const vertexData = BABYLON.VertexData.ExtractFromMesh(mesh);
+    const newMesh = new BABYLON.Mesh(mesh.name, exportScene);
+    vertexData.applyToMesh(newMesh);
+    newMesh.material = mesh.material;
+  });
+
+  if (format === 'glb') {
+    GLTF2Export.GLBAsync(exportScene, "scene.glb").then((glb) => {
+      glb.downloadFiles();
+    });
+  } else if (format === 'fbx') {
+    // Add FBX export logic here if available
+    console.log("FBX export is not implemented yet.");
+  }
+};
+
 onMounted(() => {
   initBabylonJS();
+  loadModel(exampleModel, 'stl'); // Load the example STL file on initial load
 });
 
 onBeforeUnmount(() => {
@@ -166,6 +293,12 @@ onBeforeUnmount(() => {
           <label for="cameraRadius">Camera Distance</label>
           <div class="setting-value">{{ settings.cameraRadius }}</div>
         </div>
+        <div class="setting">
+          <label for="paintColor">Paint Color</label>
+          <input type="color" id="paintColor" v-model="paintColor" />
+          <div class="setting-value">{{ paintColor }}</div>
+        </div>
+        <button class="export-button" @click="exportModel('glb')">Export to GLB</button>
       </div>
     </div>
     <canvas ref="canvasRef" class="canvas-container"></canvas>
@@ -178,6 +311,7 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
 
 <style scoped>
 .top-right-container {
