@@ -123,9 +123,6 @@ const updateCameraSpeed = (event) => {
 };
 
 const handlePointerMove = (event) => {
-  // Print current location and rotation
-  console.log('Pointer Location:', scene.pointerX, scene.pointerY);
-  console.log('Camera Position:', camera.position);
 
   const pickResult = scene.pick(scene.pointerX, scene.pointerY);
   if (pickResult.hit) {
@@ -223,9 +220,10 @@ const exportModel = (format = 'glb') => {
   });
 
   if (format === 'glb') {
-    GLTF2Export.GLBAsync(exportScene, "scene.glb").then((glb) => {
-      glb.downloadFiles();
-    });
+  const fileName = selectedFile.value ? selectedFile.value.name.split('.')[0] : 'exported-model';
+  GLTF2Export.GLBAsync(exportScene, `${fileName}.glb`).then((glb) => {
+    glb.downloadFiles();
+  });
   } else if (format === 'fbx') {
     // Add FBX export logic here if available
     console.log("FBX export is not implemented yet.");
