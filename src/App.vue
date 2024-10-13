@@ -3,6 +3,7 @@ import './style.css'
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/stl';
 import '@babylonjs/loaders/glTF';
+import '@babylonjs/loaders/OBJ';
 import { GLTF2Export } from '@babylonjs/serializers';
 import { ref, onMounted, onBeforeUnmount, reactive } from 'vue';
 import exampleModel from '@/assets/example.stl';
@@ -75,7 +76,7 @@ const loadModel = (url, extension) => {
 
   BABYLON.SceneLoader.Append("", url, scene, (newScene) => {
     console.log(`${extension.toUpperCase()} model loaded:`, newScene);
-  }, null, (scene, message, exception) => {
+  }, null, (message, exception) => {
     console.error(message, exception);
     errorMessage.value = message;
     showErrorModal.value = true;
@@ -84,7 +85,7 @@ const loadModel = (url, extension) => {
 
 const handleFileChange = (event) => {
   const file = event.target.files[0];
-  if (file && (file.name.endsWith('.stl') || file.name.endsWith('.glb'))) {
+  if (file && (file.name.endsWith('.stl') || file.name.endsWith('.glb') || file.name.endsWith('.obj'))) {
     selectedFile.value = file;
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -95,7 +96,7 @@ const handleFileChange = (event) => {
     };
     reader.readAsArrayBuffer(file);
   } else if (file) {
-    errorMessage.value = 'Unsupported file format. Please select an STL or GLB file.';
+    errorMessage.value = 'Unsupported file format. Please select an STL, GLB, or OBJ file.';
     showErrorModal.value = true;
   }
 };
@@ -122,8 +123,7 @@ const updateCameraSpeed = (event) => {
   camera.angularSensibilityY = 1000 / settings.cameraSpeed;
 };
 
-const handlePointerMove = (event) => {
-
+const handlePointerMove = () => {
   const pickResult = scene.pick(scene.pointerX, scene.pointerY);
   if (pickResult.hit) {
     const pickedMesh = pickResult.pickedMesh;
@@ -220,10 +220,10 @@ const exportModel = (format = 'glb') => {
   });
 
   if (format === 'glb') {
-  const fileName = selectedFile.value ? selectedFile.value.name.split('.')[0] : 'exported-model';
-  GLTF2Export.GLBAsync(exportScene, `${fileName}.glb`).then((glb) => {
-    glb.downloadFiles();
-  });
+    const fileName = selectedFile.value ? selectedFile.value.name.split('.')[0] : 'exported-model';
+    GLTF2Export.GLBAsync(exportScene, `${fileName}.glb`).then((glb) => {
+      glb.downloadFiles();
+    });
   } else if (format === 'fbx') {
     // Add FBX export logic here if available
     console.log("FBX export is not implemented yet.");
@@ -248,7 +248,7 @@ onBeforeUnmount(() => {
       <label for="file-input" class="custom-file-input">
         <div class="file-label-content">
           <img src="@/assets/download-icon.svg" alt="Download Icon" class="download-icon" />
-          <input type="file" id="file-input" class="file-input" @change="handleFileChange" accept=".stl,.glb" />
+          <input type="file" id="file-input" class="file-input" @change="handleFileChange" accept=".stl,.glb,.obj" />
           <span v-if="selectedFile">Selected file: {{ selectedFile.name }}</span>
           <span v-else>Choose a file...</span>
         </div>
@@ -309,7 +309,6 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
-
 
 <style scoped>
 .top-right-container {
