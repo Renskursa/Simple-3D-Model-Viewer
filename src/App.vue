@@ -13,7 +13,7 @@ const canvasRef = ref(null);
 const errorMessage = ref('');
 const showErrorModal = ref(false);
 const showLightSettings = ref(false);
-const paintColor = ref('#ff0000'); // Default paint color
+const paintColor = ref('#ff0000');
 
 const settings = reactive({
   lightIntensity: 0.7,
@@ -30,7 +30,9 @@ const settings = reactive({
 let engine, scene, camera, light, highlightMaterial, glowLayer;
 const MIN_CAMERA_RADIUS = 1.5;
 let previousHighlightMesh = null;
+let createdFaceMeshes = [];
 
+// Initializations
 const initBabylonJS = () => {
   engine = new BABYLON.Engine(canvasRef.value, true);
   scene = new BABYLON.Scene(engine);
@@ -48,7 +50,7 @@ const initBabylonJS = () => {
 
   highlightMaterial = new BABYLON.StandardMaterial("highlightMaterial", scene);
   highlightMaterial.diffuseColor = BABYLON.Color3.Magenta();
-  highlightMaterial.emissiveColor = BABYLON.Color3.Magenta(); // Set emissive color for glow effect
+  highlightMaterial.emissiveColor = BABYLON.Color3.Magenta();
 
   glowLayer = new BABYLON.GlowLayer("glowLayer", scene);
   glowLayer.intensity = 0.4;
@@ -70,7 +72,15 @@ const handleResize = () => {
   engine.resize();
 };
 
+const clearPaintedFaces = () => {
+  createdFaceMeshes.forEach(mesh => mesh.dispose());
+  createdFaceMeshes = [];
+};
+
 const loadModel = (url, extension) => {
+  // Clear all painted faces before loading a new model
+  clearPaintedFaces();
+
   // Clear the scene before loading a new model
   scene.meshes.forEach(mesh => mesh.dispose());
 
@@ -85,7 +95,7 @@ const loadModel = (url, extension) => {
 
 const handleFileChange = (event) => {
   const file = event.target.files[0];
-  if (file && (file.name.endsWith('.stl') || file.name.endsWith('.glb') || file.name.endsWith('.obj'))) {
+  if (file && (file.name.endsWith('.stl') || file.name.endsWith('.obj'))) {
     selectedFile.value = file;
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -129,7 +139,7 @@ const handlePointerMove = () => {
     const pickedMesh = pickResult.pickedMesh;
     const pickedFaceId = pickResult.faceId;
 
-    // Remove previous highlight if
+    // Remove previous highlight
     if (previousHighlightMesh) {
       glowLayer.removeIncludedOnlyMesh(previousHighlightMesh);
       previousHighlightMesh.dispose();
@@ -196,16 +206,17 @@ const handlePointerDown = (event) => {
     faceVertexData.applyToMesh(faceMesh);
 
     if (event.button === 0) { // Left mouse button is pressed
-      // Apply paint color to the selected face
       const paintMaterial = new BABYLON.StandardMaterial("paintMaterial", scene);
       paintMaterial.diffuseColor = BABYLON.Color3.FromHexString(paintColor.value);
       faceMesh.material = paintMaterial;
     } else if (event.button === 2) { // Right mouse button is pressed
-      // Reset to original material
       const originalMaterial = new BABYLON.StandardMaterial("originalMaterial", scene);
       originalMaterial.diffuseColor = BABYLON.Color3.White(); // Assuming the original color is white
       faceMesh.material = originalMaterial;
     }
+
+    // Add the created face mesh to the array
+    createdFaceMeshes.push(faceMesh);
   }
 };
 
@@ -248,7 +259,7 @@ onBeforeUnmount(() => {
       <label for="file-input" class="custom-file-input">
         <div class="file-label-content">
           <img src="@/assets/download-icon.svg" alt="Download Icon" class="download-icon" />
-          <input type="file" id="file-input" class="file-input" @change="handleFileChange" accept=".stl,.glb,.obj" />
+          <input type="file" id="file-input" class="file-input" @change="handleFileChange" accept=".stl,.obj" />
           <span v-if="selectedFile">Selected file: {{ selectedFile.name }}</span>
           <span v-else>Choose a file...</span>
         </div>
