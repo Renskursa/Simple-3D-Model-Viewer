@@ -14,7 +14,8 @@ const errorMessage = ref('');
 const showErrorModal = ref(false);
 const showLightSettings = ref(false);
 const paintColor = ref('#ff0000');
-const isSettingsPanelVisible = ref(true); // New state for settings panel visibility
+const isSettingsPanelVisible = ref(true);
+const showUncollapseButton = ref(false);
 
 const settings = reactive({
   lightIntensity: 0.7,
@@ -69,6 +70,16 @@ const initBabylonJS = () => {
   scene.onPointerMove = handlePointerMove;
   scene.onPointerDown = handlePointerDown;
 };
+
+const handleMinimizeClick = () => {
+  isSettingsPanelVisible.value = false;
+};
+
+const handleRestoreClick = () => {
+  isSettingsPanelVisible.value = true;
+  showUncollapseButton.value = false;
+};
+
 
 const handleResize = () => {
   engine.resize();
@@ -279,17 +290,19 @@ onBeforeUnmount(() => {
     <div class="top-right-container">
       <label for="file-input" class="custom-file-input">
         <div class="file-label-content">
-          <img src="@/assets/download-icon.svg" alt="Download Icon" class="download-icon" />
+          <img src="@/assets/upload-icon.svg" alt="Upload Icon" class="upload-icon" />
           <input type="file" id="file-input" class="file-input" @change="handleFileChange" accept=".stl,.obj" />
           <span v-if="selectedFile">Selected file: {{ selectedFile.name }}</span>
           <span v-else>Choose a file...</span>
         </div>
       </label>
-      <transition name="settings-panel">
-        <div v-if="isSettingsPanelVisible" class="settings-panel">
+      <transition name="settings-panel" @after-leave="showUncollapseButton = true">
+        <div v-show="isSettingsPanelVisible" class="settings-panel">
           <div class="setting minimize-setting">
-            <button class="minimize-button" @click="isSettingsPanelVisible = false">Minimize</button>
-          </div>
+            <button class="minimize-button" @click="handleMinimizeClick">
+              <img src="@/assets/collapse-right.svg" alt="Collapse Right" class="collapse-right" />
+            </button>
+          </div>     
           <div class="setting">
             <label for="backgroundColor">Background Color</label>
             <input type="color" id="backgroundColor" v-model="settings.backgroundColor" @input="updateBackgroundColor" />
@@ -333,22 +346,23 @@ onBeforeUnmount(() => {
             <div class="setting-value">{{ paintColor }}</div>
           </div>
           <div class="setting">
-            <button class="button undo-button" @click="undoLastAction">Undo</button>
+            <button class="base-button undo-button" @click="undoLastAction">Undo</button>
           </div>
           <div class="setting">
-            <button class="button export-button" @click="() => exportModel()">Export</button>
+            <button class="base-button export-button" @click="() => exportModel()">
+              <img src="@/assets/download-icon.svg" alt="Download Icon" class="download-icon" />
+              Export
+            </button>
           </div>
         </div>
       </transition>
-      <template v-if="!isSettingsPanelVisible">
-        <button class="restore-button" @click="isSettingsPanelVisible = true">
-          <div class="hamburger-icon">
-            <div></div>
-            <div></div>
-            <div></div>
-          </div>
-        </button>
-      </template>
+      <transition name="uncollapse-button">
+        <template v-if="!isSettingsPanelVisible && showUncollapseButton">
+          <button class="restore-button" @click="handleRestoreClick">
+            <img src="@/assets/uncollapse-right.svg" alt="Uncollapse Right" class="uncollapse-right" />
+          </button>
+        </template>
+      </transition>
     </div>
     <canvas ref="canvasRef" class="canvas-container"></canvas>
     <div v-if="showErrorModal" class="modal">
@@ -362,112 +376,16 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* Container Styles */
 .top-right-container {
   position: absolute;
   top: 15px;
-  right: 15px;
+  right: 0;
   z-index: 10;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 10px;
-}
-
-.minimize-setting {
-  position: relative;
-  width: 100%;
-  padding-bottom: 24px; 
-}
-
-.minimize-button {
-  padding: 5px 10px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
-  background-color: #333; /* Darker background */
-  color: #fff; /* White text */
-  border: 2px solid #444; /* Darker border */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  position: absolute;
-  right: 0;
-}
-
-.restore-button {
-  background-color: #333; /* Darker background */
-  color: #fff; /* White text */
-  border: 2px solid #444; /* Darker border */
-  border-radius: 50%;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.restore-button:hover {
-  background-color: #444; /* Slightly lighter background */
-}
-
-.hamburger-icon {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  width: 20px;
-  height: 15px;
-  box-sizing: border-box;
-}
-
-.hamburger-icon div {
-  background-color: #fff; /* White */
-  height: 2px;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.file-input {
-  display: none;
-}
-
-.custom-file-input {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px;
-  border: 1px solid #6a0dad; /* Purple */
-  border-radius: 5px;
-  background-color: #6a0dad;
-  color: white;
-  cursor: pointer;
-  margin-bottom: 10px;
-}
-
-.file-label-content {
-  display: flex;
-  align-items: center;
-  user-select: none;
-}
-
-.custom-file-input span {
-  margin-right: 1px;
-}
-
-.custom-file-input p {
-  margin: 0;
-}
-
-.custom-file-input:hover {
-  background-color: #5a0cad; /* Darker Purple */
-}
-
-.download-icon {
-  width: 32px;
-  height: 32px;
-  padding-right: 1px
-}
-
-canvas {
-  outline: none;
 }
 
 .canvas-container {
@@ -492,6 +410,7 @@ canvas {
   overflow: auto;
   background-color: rgba(0, 0, 0, 0.5);
 }
+
 .modal-content {
   background-color: #fefefe;
   padding: 20px;
@@ -503,111 +422,19 @@ canvas {
   margin: 0 auto;
   position: relative;
 }
-.close {
-  color: #000000;
-  font-size: 28px;
-  font-weight: bold;
-  position: absolute;
-  top: 0;
-  right: 0;
-  margin-right: 15px;
-}
-.close:hover,
-.close:focus {
-  color: black;
-  text-decoration: none;
-  cursor: pointer;
-}
-.error-warning {
-  color: red;
-  font-size: 20px;
-  font-weight: bold;
-}
-.error-text {
-  color: #000000;
-  font-size: 16px;
-}
+
 .settings-panel {
   position: absolute;
-  top: 55px;
+  top: 60px;
   right: 0;
-  width: 200px;
-  background-color: rgba(58, 58, 58, 0.438);
+  width: 250px;
+  background-color: rgba(0, 0, 0, 0.759);
   padding: 10px;
-  border-radius: 10px;
-  border: 4px #000000 groove;
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
   z-index: 10;
 }
-.setting {
-  margin-bottom: 10px;
-  user-select: none;
-}
-.setting label {
-  display: block;
-  margin-bottom: 5px;
-  user-select: none;
-}
-.setting input[type="range"],
-.setting input[type="color"] {
-  width: 100%;
-}
-.setting-value {
-  margin-top: 5px;
-  font-size: 14px;
-  color: #ffffff;
-}
-.toggle-button {
-  margin-top: 10px;
-  padding: 5px 10px;
-  width: 100%;
-  background-color: #614caf; /* Purple */
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.toggle-button:hover {
-  background-color: #43337d; /* Dark-Purple */
-}
 
-.button {
-  margin-top: 5px;
-  padding: 5px 10px;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
-  background-color: #333; /* Darker background */
-  color: #fff; /* White text */
-  border: 2px solid #444; /* Darker border */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-.undo-button {
-  background-color: #8b0000; /* Dark Red */
-  color: white;
-  border: 2px solid #5a0000; /* Even darker red */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3); /* Darker shadow */
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.undo-button:hover {
-  background-color: #5a0000; /* Even darker red */
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4); /* Darker shadow */
-}
-
-.export-button {
-  background-color: #006400; /* Dark Green */
-  color: white;
-  width: 100%;
-  border: 2px solid #004d00; /* Darker green */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.export-button:hover {
-  background-color: #004d00; /* Even darker green */
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
 .sub-settings {
   margin-top: 10px;
   margin-bottom: 15px;
@@ -616,12 +443,138 @@ canvas {
   background-color: rgba(65, 65, 65, 0.495);
   border-radius: 10px;
 }
+
+/* Button Styles */
+.minimize-button,
+.restore-button,
+.custom-file-input,
+.toggle-button,
+.undo-button,
+.export-button,
+.base-button {
+  cursor: pointer;
+  border: none;
+  border-radius: 5px;
+}
+
+.minimize-button {
+  position: absolute;
+  right: 0;
+  background: none;
+  padding: 0;
+}
+
+.restore-button {
+  background-color: rgba(0, 0, 0, 0.759);
+  color: #fff;
+  border-top-left-radius: 20px;
+  border-bottom-left-radius: 20px;
+  width: 45px;
+  height: 40px;
+  margin-top: 5px;
+}
+
+.restore-button:hover {
+  background-color: rgba(20, 19, 19, 0.438);
+}
+
+.custom-file-input {
+  margin-right: 15px;
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid #6a0dad;
+  background-color: #6a0dad;
+  color: white;
+  margin-bottom: 10px;
+}
+
+.custom-file-input:hover {
+  background-color: #5a0cad;
+}
+
+.toggle-button {
+  margin-top: 10px;
+  padding: 5px 10px;
+  width: 100%;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  background-color: #614caf;
+  color: white;
+}
+
+.toggle-button:hover {
+  background-color: #43337d;
+}
+
+.undo-button {
+  background-color: #8b0000;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  width: 50%;
+}
+
+.undo-button:hover {
+  background-color: #5a0000;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+}
+
+.export-button {
+  background-color: #614caf;
+  color: white;
+  width: 100%;
+  margin-top: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.export-button:hover {
+  background-color: #43337d;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.base-button {
+  padding: 5px 10px;
+  color: white;
+}
+
+/* Icon Styles */
+.collapse-right,
+.uncollapse-right,
+.upload-icon,
+.download-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.collapse-right,
+.uncollapse-right {
+  filter: invert();
+}
+
+.upload-icon {
+  padding-right: 1px;
+}
+
+/* Input Styles */
+.file-input {
+  display: none;
+}
+
+.setting input[type="range"],
+.setting input[type="color"] {
+  width: 100%;
+}
+
 .slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
   height: 8px;
-  background: #a16c6c; /* Light-Red */
+  background: #a16c6c;
   outline: none;
   opacity: 0.7;
   transition: opacity .2s;
@@ -636,21 +589,114 @@ canvas {
   appearance: none;
   width: 10px;
   height: 15px;
-  background: #ff0f0f; /* Red */
-  cursor: pointer;
+  background: #ff0f0f;
 }
 
 .slider::-moz-range-thumb {
   width: 15px;
   height: 15px;
-  background: #5a5e5a; /* Gray */
-  cursor: pointer;
-}
-.settings-panel-enter-active, .settings-panel-leave-active {
-  transition: transform 0.4s ease;
+  background: #5a5e5a;
 }
 
-.settings-panel-enter, .settings-panel-leave-to /* .settings-panel-leave-active in <2.1.8 */ {
-  transform: translateX(110%);
+/* Text Styles */
+.custom-file-input span {
+  margin-right: 1px;
+}
+
+.custom-file-input p {
+  margin: 0;
+}
+
+.error-warning {
+  color: red;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.error-text {
+  color: #000000;
+  font-size: 16px;
+}
+
+.setting-value {
+  margin-top: 5px;
+  font-size: 14px;
+  color: #ffffff;
+}
+
+/* Miscellaneous Styles */
+.minimize-setting {
+  position: relative;
+  width: 100%;
+  padding-bottom: 26px;
+}
+
+.file-label-content {
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+canvas {
+  outline: none;
+}
+
+.close {
+  color: #000000;
+  font-size: 28px;
+  font-weight: bold;
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin-right: 15px;
+}
+
+.close:hover,
+.close:focus {
+  color: black;
+  text-decoration: none;
+}
+
+.setting {
+  margin-bottom: 10px;
+  user-select: none;
+}
+
+.setting label {
+  display: block;
+  margin-bottom: 5px;
+  user-select: none;
+}
+
+.settings-panel-leave-active {
+  transition: transform 0.25s ease;
+}
+
+.settings-panel-leave-to {
+  transform: translateX(102%);
+}
+
+.settings-panel-enter-active {
+  transition: transform 0.25s ease;
+}
+
+.settings-panel-enter-from {
+  transform: translateX(102%);
+}
+
+.uncollapse-button-enter-active {
+  transition: transform 0.15s ease;
+}
+
+.uncollapse-button-enter-from {
+  transform: translateX(102%);
+}
+
+.uncollapse-button-leave-active {
+  transition: transform 0.1s ease;
+}
+
+.uncollapse-button-leave-to {
+  transform: translateX(102%);
 }
 </style>
