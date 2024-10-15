@@ -5,6 +5,7 @@ import '@babylonjs/loaders/stl';
 import '@babylonjs/loaders/glTF';
 import '@babylonjs/loaders/OBJ';
 import { GLTF2Export } from '@babylonjs/serializers';
+import { GridMaterial } from '@babylonjs/materials/grid';
 import { ref, onMounted, onBeforeUnmount, reactive } from 'vue';
 import exampleModel from '@/assets/example.stl';
 
@@ -29,18 +30,22 @@ const settings = reactive({
   cameraSpeed: 1,
 });
 
-let engine, scene, camera, light, highlightMaterial, glowLayer;
+const mode = ref('gizmo'); // 'gizmo' or 'paint'
+
+let engine, scene, camera, light, highlightMaterial, glowLayer, ground;
 const MIN_CAMERA_RADIUS = 1.5;
 let previousHighlightMesh = null;
 let createdFaceMeshes = [];
 let actionStack = [];
+let gizmoManager;
 
-// Initializations
 const initBabylonJS = () => {
+  // Initialize engine and scene
   engine = new BABYLON.Engine(canvasRef.value, true);
   scene = new BABYLON.Scene(engine);
   scene.clearColor = BABYLON.Color3.FromHexString(settings.backgroundColor);
 
+  // Initialize camera
   camera = new BABYLON.ArcRotateCamera("camera", Math.PI / 2, Math.PI / 2, settings.cameraRadius, BABYLON.Vector3.Zero(), scene);
   camera.attachControl(canvasRef.value, true);
   camera.wheelPrecision = 50 / settings.cameraSpeed;
@@ -48,16 +53,81 @@ const initBabylonJS = () => {
   camera.angularSensibilityY = 1000 / settings.cameraSpeed;
   camera.setPosition(new BABYLON.Vector3(settings.startX, settings.startY, settings.cameraRadius));
 
+  // Initialize light
   light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(settings.lightDirectionX, settings.lightDirectionY, settings.lightDirectionZ), scene);
   light.intensity = settings.lightIntensity;
 
+  // Initialize materials
   highlightMaterial = new BABYLON.StandardMaterial("highlightMaterial", scene);
   highlightMaterial.diffuseColor = BABYLON.Color3.Magenta();
   highlightMaterial.emissiveColor = BABYLON.Color3.Magenta();
+  highlightMaterial.renderingGroupId = 1;
+  highlightMaterial.renderingOrder = 1;
 
   glowLayer = new BABYLON.GlowLayer("glowLayer", scene);
   glowLayer.intensity = 0.4;
 
+  // Initialize gizmo manager
+  gizmoManager = new BABYLON.GizmoManager(scene);
+  gizmoManager.positionGizmoEnabled = true;
+  gizmoManager.scaleGizmoEnabled = true;
+  gizmoManager.gizmos.scaleGizmo.scaleRatio = 1.25;
+
+  let initialTransform = null;
+
+  // Track gizmo transformations
+  const trackGizmoTransformations = (gizmo) => {
+    gizmo.onDragStartObservable.add(() => {
+      const mesh = gizmo.attachedMesh;
+      if (mesh) {
+        initialTransform = {
+          position: mesh.position.clone(),
+          rotation: mesh.rotation.clone(),
+          scaling: mesh.scaling.clone()
+        };
+      }
+    });
+
+    gizmo.onDragEndObservable.add(() => {
+      const mesh = gizmo.attachedMesh;
+      if (mesh && initialTransform) {
+        const finalTransform = {
+          position: mesh.position.clone(),
+          rotation: mesh.rotation.clone(),
+          scaling: mesh.scaling.clone()
+        };
+        actionStack.push({
+          type: 'transform',
+          mesh,
+          initialTransform,
+          finalTransform
+        });
+      }
+    });
+  };
+
+  trackGizmoTransformations(gizmoManager.gizmos.positionGizmo);
+  trackGizmoTransformations(gizmoManager.gizmos.scaleGizmo);
+
+  // Create ground mesh
+  ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 100, height: 100 }, scene);
+
+  // Create grid material
+  const gridMaterial = new GridMaterial("gridMaterial", scene);
+  gridMaterial.majorUnitFrequency = 5;
+  gridMaterial.minorUnitVisibility = 0.45;
+  gridMaterial.gridRatio = 1;
+  gridMaterial.backFaceCulling = false;
+  gridMaterial.mainColor = new BABYLON.Color3(1, 1, 1);
+  gridMaterial.lineColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+  gridMaterial.opacity = 0.3;
+
+  // Apply grid material to ground
+  ground.material = gridMaterial;
+  ground.isPickable = false; // Make ground not pickable
+  ground.renderingGroupId = 0;
+
+  // Run render loop
   engine.runRenderLoop(() => {
     if (camera.radius < MIN_CAMERA_RADIUS) {
       camera.radius = MIN_CAMERA_RADIUS;
@@ -71,16 +141,6 @@ const initBabylonJS = () => {
   scene.onPointerDown = handlePointerDown;
 };
 
-const handleMinimizeClick = () => {
-  isSettingsPanelVisible.value = false;
-};
-
-const handleRestoreClick = () => {
-  isSettingsPanelVisible.value = true;
-  showUncollapseButton.value = false;
-};
-
-
 const handleResize = () => {
   engine.resize();
 };
@@ -93,8 +153,30 @@ const clearPaintedFaces = () => {
 const undoLastAction = () => {
   if (actionStack.length > 0) {
     const lastAction = actionStack.pop();
-    if (lastAction.type === 'paint') {
-      lastAction.mesh.dispose();
+    console.log(lastAction);
+    switch (lastAction.type) {
+      case 'paint':
+        const { mesh, faceIndices, originalColors } = lastAction;
+        const colorsData = mesh.getVerticesData(BABYLON.VertexBuffer.ColorKind);
+
+        // Restore original colors
+        faceIndices.forEach((index, i) => {
+          colorsData[index * 4] = originalColors[i][0];
+          colorsData[index * 4 + 1] = originalColors[i][1];
+          colorsData[index * 4 + 2] = originalColors[i][2];
+          colorsData[index * 4 + 3] = originalColors[i][3];
+        });
+
+        mesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colorsData);
+        mesh.material.vertexColorsEnabled = true;
+        mesh.material.backFaceCulling = true;
+        break;
+      case 'transform':
+        const { mesh: transformedMesh, initialTransform } = lastAction;
+        transformedMesh.position = initialTransform.position;
+        transformedMesh.rotation = initialTransform.rotation;
+        transformedMesh.scaling = initialTransform.scaling;
+        break;
     }
   }
 };
@@ -103,11 +185,32 @@ const loadModel = (url, extension) => {
   // Clear all painted faces before loading a new model
   clearPaintedFaces();
 
-  // Clear the scene before loading a new model
-  scene.meshes.forEach(mesh => mesh.dispose());
+  // Clear the scene before loading a new model, except for the ground
+  scene.meshes.filter(mesh => mesh !== ground).forEach(mesh => mesh.dispose());
 
-  BABYLON.SceneLoader.Append("", url, scene, (newScene) => {
-    console.log(`${extension.toUpperCase()} model loaded:`, newScene);
+  BABYLON.SceneLoader.Append("", url, scene, () => {
+    scene.meshes.forEach(mesh => {
+      if (mesh !== ground) {
+        mesh.renderingGroupId = 1;
+        mesh.renderingOrder = 0; 
+        mesh.hasVertexAlpha = false;
+ 
+        // Enable vertex colors for loaded meshes
+        if (!mesh.material) {
+        mesh.material = new BABYLON.StandardMaterial("vertexColorMaterial", scene);
+        }
+        mesh.material.vertexColorsEnabled = true;
+        mesh.material.backFaceCulling = true;
+
+        mesh.actionManager = new BABYLON.ActionManager(scene);
+        mesh.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
+          if (mode.value === 'gizmo') {
+            gizmoManager.attachToMesh(mesh);
+          }
+        }));
+      }
+    });
+    console.log(`${extension.toUpperCase()} model loaded`);
   }, null, (message, exception) => {
     console.error(message, exception);
     errorMessage.value = message;
@@ -156,12 +259,20 @@ const updateCameraSpeed = (event) => {
 };
 
 const handlePointerMove = () => {
-  const pickResult = scene.pick(scene.pointerX, scene.pointerY);
+  if (mode.value === 'gizmo') {
+    return;
+  }
+
+  const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => !mesh.isHighlightMesh && mesh !== ground);
   if (pickResult.hit) {
     const pickedMesh = pickResult.pickedMesh;
     const pickedFaceId = pickResult.faceId;
 
-    // Remove previous highlight
+    // Check if the same face is already highlighted
+    if (previousHighlightMesh && previousHighlightMesh.pickedMesh === pickedMesh && previousHighlightMesh.pickedFaceId === pickedFaceId) {
+      return;
+    }
+
     if (previousHighlightMesh) {
       glowLayer.removeIncludedOnlyMesh(previousHighlightMesh);
       previousHighlightMesh.dispose();
@@ -169,25 +280,40 @@ const handlePointerMove = () => {
 
     const indices = pickedMesh.getIndices();
     const vertexData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+
+    // Check if vertexData is valid
+    if (!vertexData) {
+      return;
+    }
+
     const faceIndices = [
       indices[pickedFaceId * 3],
       indices[pickedFaceId * 3 + 1],
       indices[pickedFaceId * 3 + 2]
     ];
 
-    // Create a new mesh for the highlighted face
+    // Transform the vertex positions using the world matrix of the picked mesh
+    const worldMatrix = pickedMesh.getWorldMatrix();
+    const transformedPositions = [];
+    for (const index of faceIndices) {
+      const position = BABYLON.Vector3.FromArray(vertexData, index * 3);
+      const transformedPosition = BABYLON.Vector3.TransformCoordinates(position, worldMatrix);
+      transformedPositions.push(transformedPosition.x, transformedPosition.y, transformedPosition.z);
+    }
+
     const highlightMesh = new BABYLON.Mesh("highlightMesh", scene);
-    highlightMesh.isHighlightMesh = true; // Mark as non-exportable
+    highlightMesh.isHighlightMesh = true;
+    highlightMesh.pickedMesh = pickedMesh;
+    highlightMesh.pickedFaceId = pickedFaceId;
 
     const highlightVertexData = new BABYLON.VertexData();
-    highlightVertexData.positions = [
-      vertexData[faceIndices[0] * 3], vertexData[faceIndices[0] * 3 + 1], vertexData[faceIndices[0] * 3 + 2],
-      vertexData[faceIndices[1] * 3], vertexData[faceIndices[1] * 3 + 1], vertexData[faceIndices[1] * 3 + 2],
-      vertexData[faceIndices[2] * 3], vertexData[faceIndices[2] * 3 + 1], vertexData[faceIndices[2] * 3 + 2]
-    ];
+    highlightVertexData.positions = transformedPositions;
     highlightVertexData.indices = [0, 1, 2];
     highlightVertexData.applyToMesh(highlightMesh);
     highlightMesh.material = highlightMaterial;
+    highlightMesh.renderingGroupId = 1;
+    highlightMesh.renderingOrder = 1;
+    
     glowLayer.addIncludedOnlyMesh(highlightMesh);
     previousHighlightMesh = highlightMesh;
   } else {
@@ -201,46 +327,69 @@ const handlePointerMove = () => {
 };
 
 const handlePointerDown = (event) => {
-  const pickResult = scene.pick(scene.pointerX, scene.pointerY);
+  const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => !mesh.isHighlightMesh && mesh !== ground);
   if (pickResult.hit) {
     const pickedMesh = pickResult.pickedMesh;
     const pickedFaceId = pickResult.faceId;
     console.log('Picked face ID:', pickedFaceId);
 
-    const indices = pickedMesh.getIndices();
-    const vertexData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
-    const faceIndices = [
-      indices[pickedFaceId * 3],
-      indices[pickedFaceId * 3 + 1],
-      indices[pickedFaceId * 3 + 2]
-    ];
+    if (mode.value === 'paint') {
+      const indices = pickedMesh.getIndices();
+      const vertexData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+      let colorsData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.ColorKind);
 
-    // Create a new mesh for the selected face
-    const faceMesh = new BABYLON.Mesh("faceMesh", scene);
-    const faceVertexData = new BABYLON.VertexData();
-    faceVertexData.positions = [
-      vertexData[faceIndices[0] * 3], vertexData[faceIndices[0] * 3 + 1], vertexData[faceIndices[0] * 3 + 2],
-      vertexData[faceIndices[1] * 3], vertexData[faceIndices[1] * 3 + 1], vertexData[faceIndices[1] * 3 + 2],
-      vertexData[faceIndices[2] * 3], vertexData[faceIndices[2] * 3 + 1], vertexData[faceIndices[2] * 3 + 2]
-    ];
-    faceVertexData.indices = [0, 1, 2];
-    faceVertexData.applyToMesh(faceMesh);
+      // Initialize color data if it doesn't exist
+      if (!colorsData) {
+        colorsData = new Float32Array(vertexData.length / 3 * 4);
+        for (let i = 0; i < vertexData.length / 3; i++) {
+          colorsData[i * 4] = 1.0; // R
+          colorsData[i * 4 + 1] = 1.0; // G
+          colorsData[i * 4 + 2] = 1.0; // B
+          colorsData[i * 4 + 3] = 1.0; // A
+        }
+      }
 
-    if (event.button === 0) { // Left mouse button is pressed
-      const paintMaterial = new BABYLON.StandardMaterial("paintMaterial", scene);
-      paintMaterial.diffuseColor = BABYLON.Color3.FromHexString(paintColor.value);
-      faceMesh.material = paintMaterial;
-    } else if (event.button === 2) { // Right mouse button is pressed
-      const originalMaterial = new BABYLON.StandardMaterial("originalMaterial", scene);
-      originalMaterial.diffuseColor = BABYLON.Color3.White(); // Assuming the original color is white
-      faceMesh.material = originalMaterial;
+      const faceIndices = [
+        indices[pickedFaceId * 3],
+        indices[pickedFaceId * 3 + 1],
+        indices[pickedFaceId * 3 + 2]
+      ];
+
+      const paintColorArray = BABYLON.Color3.FromHexString(paintColor.value).asArray().concat([1.0]);
+
+      // Store original colors before painting
+      const originalColors = faceIndices.map(index => [
+        colorsData[index * 4],
+        colorsData[index * 4 + 1],
+        colorsData[index * 4 + 2],
+        colorsData[index * 4 + 3]
+      ]);
+
+      if (event.button === 0) { // Left mouse button is pressed
+        // Paint the selected face
+        faceIndices.forEach(index => {
+          colorsData[index * 4] = paintColorArray[0];
+          colorsData[index * 4 + 1] = paintColorArray[1];
+          colorsData[index * 4 + 2] = paintColorArray[2];
+          colorsData[index * 4 + 3] = paintColorArray[3];
+        });
+      } else if (event.button === 2) { // Right mouse button is pressed
+        // Remove the paint from the selected face (reset to white)
+        faceIndices.forEach(index => {
+          colorsData[index * 4] = 1.0;
+          colorsData[index * 4 + 1] = 1.0;
+          colorsData[index * 4 + 2] = 1.0;
+          colorsData[index * 4 + 3] = 1.0;
+        });
+      }
+
+      pickedMesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colorsData);
+
+      // Push the action to the stack
+      actionStack.push({ type: 'paint', mesh: pickedMesh, faceIndices, originalColors });
+
+      console.log('Face Painted:', faceIndices);
     }
-
-    // Add the created face mesh to the array
-    createdFaceMeshes.push(faceMesh);
-
-    // Push the action to the stack
-    actionStack.push({ type: 'paint', mesh: faceMesh });
   }
 };
 
@@ -266,7 +415,20 @@ const exportModel = (format = 'glb') => {
 };
 
 const handleKeyDown = (event) => {
-  if (event.ctrlKey && event.key === 'z') {
+  if (event.key === '1' || event.key === 'q') {
+    mode.value = 'gizmo';
+    gizmoManager.positionGizmoEnabled = true;
+    gizmoManager.scaleGizmoEnabled = true;  
+    
+    if (previousHighlightMesh) {
+      glowLayer.removeIncludedOnlyMesh(previousHighlightMesh);
+      previousHighlightMesh.dispose();
+    }
+  } else if (event.key === '2' || event.key === 'w') {
+    mode.value = 'paint';
+    gizmoManager.positionGizmoEnabled = false;
+    gizmoManager.scaleGizmoEnabled = false;  
+  } else if (event.ctrlKey && event.key === 'z') {
     undoLastAction();
   }
 };
@@ -299,7 +461,7 @@ onBeforeUnmount(() => {
       <transition name="settings-panel" @after-leave="showUncollapseButton = true">
         <div v-show="isSettingsPanelVisible" class="settings-panel">
           <div class="setting minimize-setting">
-            <button class="minimize-button" @click="handleMinimizeClick">
+            <button class="minimize-button" @click="isSettingsPanelVisible = false">
               <img src="@/assets/collapse-right.svg" alt="Collapse Right" class="collapse-right" />
             </button>
           </div>     
@@ -358,7 +520,7 @@ onBeforeUnmount(() => {
       </transition>
       <transition name="uncollapse-button">
         <template v-if="!isSettingsPanelVisible && showUncollapseButton">
-          <button class="restore-button" @click="handleRestoreClick">
+          <button class="restore-button" @click="  isSettingsPanelVisible = true; showUncollapseButton = false;">
             <img src="@/assets/uncollapse-right.svg" alt="Uncollapse Right" class="uncollapse-right" />
           </button>
         </template>
@@ -374,329 +536,3 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
-
-<style scoped>
-/* Container Styles */
-.top-right-container {
-  position: absolute;
-  top: 15px;
-  right: 0;
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 10px;
-}
-
-.canvas-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: #242424;
-}
-
-.modal {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: fixed;
-  z-index: 100;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.modal-content {
-  background-color: #fefefe;
-  padding: 20px;
-  border: 1px solid #888;
-  border-radius: 30px;
-  max-width: 80%;
-  height: auto;
-  width: auto;
-  margin: 0 auto;
-  position: relative;
-}
-
-.settings-panel {
-  position: absolute;
-  top: 60px;
-  right: 0;
-  width: 250px;
-  background-color: rgba(0, 0, 0, 0.759);
-  padding: 10px;
-  border-top-left-radius: 10px;
-  border-bottom-left-radius: 10px;
-  z-index: 10;
-}
-
-.sub-settings {
-  margin-top: 10px;
-  margin-bottom: 15px;
-  height: 255px;
-  padding: 10px;
-  background-color: rgba(65, 65, 65, 0.495);
-  border-radius: 10px;
-}
-
-/* Button Styles */
-.minimize-button,
-.restore-button,
-.custom-file-input,
-.toggle-button,
-.undo-button,
-.export-button,
-.base-button {
-  cursor: pointer;
-  border: none;
-  border-radius: 5px;
-}
-
-.minimize-button {
-  position: absolute;
-  right: 0;
-  background: none;
-  padding: 0;
-}
-
-.restore-button {
-  background-color: rgba(0, 0, 0, 0.759);
-  color: #fff;
-  border-top-left-radius: 20px;
-  border-bottom-left-radius: 20px;
-  width: 45px;
-  height: 40px;
-  margin-top: 5px;
-}
-
-.restore-button:hover {
-  background-color: rgba(20, 19, 19, 0.438);
-}
-
-.custom-file-input {
-  margin-right: 15px;
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px;
-  border: 1px solid #6a0dad;
-  background-color: #6a0dad;
-  color: white;
-  margin-bottom: 10px;
-}
-
-.custom-file-input:hover {
-  background-color: #5a0cad;
-}
-
-.toggle-button {
-  margin-top: 10px;
-  padding: 5px 10px;
-  width: 100%;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  background-color: #614caf;
-  color: white;
-}
-
-.toggle-button:hover {
-  background-color: #43337d;
-}
-
-.undo-button {
-  background-color: #8b0000;
-  color: white;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  width: 50%;
-}
-
-.undo-button:hover {
-  background-color: #5a0000;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-}
-
-.export-button {
-  background-color: #614caf;
-  color: white;
-  width: 100%;
-  margin-top: 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.export-button:hover {
-  background-color: #43337d;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
-
-.base-button {
-  padding: 5px 10px;
-  color: white;
-}
-
-/* Icon Styles */
-.collapse-right,
-.uncollapse-right,
-.upload-icon,
-.download-icon {
-  width: 32px;
-  height: 32px;
-}
-
-.collapse-right,
-.uncollapse-right {
-  filter: invert();
-}
-
-.upload-icon {
-  padding-right: 1px;
-}
-
-/* Input Styles */
-.file-input {
-  display: none;
-}
-
-.setting input[type="range"],
-.setting input[type="color"] {
-  width: 100%;
-}
-
-.slider {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 8px;
-  background: #a16c6c;
-  outline: none;
-  opacity: 0.7;
-  transition: opacity .2s;
-}
-
-.slider:hover {
-  opacity: 1;
-}
-
-.slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 10px;
-  height: 15px;
-  background: #ff0f0f;
-}
-
-.slider::-moz-range-thumb {
-  width: 15px;
-  height: 15px;
-  background: #5a5e5a;
-}
-
-/* Text Styles */
-.custom-file-input span {
-  margin-right: 1px;
-}
-
-.custom-file-input p {
-  margin: 0;
-}
-
-.error-warning {
-  color: red;
-  font-size: 20px;
-  font-weight: bold;
-}
-
-.error-text {
-  color: #000000;
-  font-size: 16px;
-}
-
-.setting-value {
-  margin-top: 5px;
-  font-size: 14px;
-  color: #ffffff;
-}
-
-/* Miscellaneous Styles */
-.minimize-setting {
-  position: relative;
-  width: 100%;
-  padding-bottom: 26px;
-}
-
-.file-label-content {
-  display: flex;
-  align-items: center;
-  user-select: none;
-}
-
-canvas {
-  outline: none;
-}
-
-.close {
-  color: #000000;
-  font-size: 28px;
-  font-weight: bold;
-  position: absolute;
-  top: 0;
-  right: 0;
-  margin-right: 15px;
-}
-
-.close:hover,
-.close:focus {
-  color: black;
-  text-decoration: none;
-}
-
-.setting {
-  margin-bottom: 10px;
-  user-select: none;
-}
-
-.setting label {
-  display: block;
-  margin-bottom: 5px;
-  user-select: none;
-}
-
-.settings-panel-leave-active {
-  transition: transform 0.25s ease;
-}
-
-.settings-panel-leave-to {
-  transform: translateX(102%);
-}
-
-.settings-panel-enter-active {
-  transition: transform 0.25s ease;
-}
-
-.settings-panel-enter-from {
-  transform: translateX(102%);
-}
-
-.uncollapse-button-enter-active {
-  transition: transform 0.15s ease;
-}
-
-.uncollapse-button-enter-from {
-  transform: translateX(102%);
-}
-
-.uncollapse-button-leave-active {
-  transition: transform 0.1s ease;
-}
-
-.uncollapse-button-leave-to {
-  transform: translateX(102%);
-}
-</style>
