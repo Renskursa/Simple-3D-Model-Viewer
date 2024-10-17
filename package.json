@@ -16,6 +16,7 @@
     "@babylonjs/loaders": "^7.29.0",
     "@babylonjs/materials": "^7.30.0",
     "@babylonjs/serializers": "^7.29.0",
+    "babylonjs-loaders": "^7.30.0",
     "gh-pages": "^6.2.0",
     "lodash-es": "^4.17.21",
     "three": "^0.169.0",

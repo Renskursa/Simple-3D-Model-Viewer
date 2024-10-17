@@ -38,6 +38,8 @@ export default {
 <style scoped>
 .tool-rack {
     display: flex;
+    user-select: none;
+    outline: none;
     flex-direction: column;
     position: fixed;
     left: 10px;

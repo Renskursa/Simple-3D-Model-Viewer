@@ -10,6 +10,9 @@ import '@babylonjs/loaders/glTF';
 import '@babylonjs/loaders/OBJ';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import exampleModel from '@/assets/example.stl';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
+import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 const props = defineProps({
     settings: Object,
@@ -26,6 +29,9 @@ const actionStack = props.actionStack;
 const emit = defineEmits(['context-initialized', 'mode-changed', 'tool-changed']);
 
 const canvasRef = ref(null);
+const errorMessage = ref(''); // Define errorMessage
+const showErrorModal = ref(false); // Define showErrorModal
+
 let engine, scene, camera, light, highlightMaterial, glowLayer, ground, gizmoManager;
 
 const selectedFile = ref(null);
@@ -67,6 +73,8 @@ const initBabylonJS = () => {
     // Initialize gizmo manager
     gizmoManager = new BABYLON.GizmoManager(scene);
     gizmoManager.positionGizmoEnabled = true;
+    gizmoManager.rotationGizmoEnabled = true;
+    gizmoManager.gizmos.rotationGizmo.scaleRatio = 0.75;
     gizmoManager.scaleGizmoEnabled = true;
     gizmoManager.gizmos.scaleGizmo.scaleRatio = 1.25;
 
@@ -104,6 +112,7 @@ const initBabylonJS = () => {
     };
 
     trackGizmoTransformations(gizmoManager.gizmos.positionGizmo);
+    trackGizmoTransformations(gizmoManager.gizmos.rotationGizmo);
     trackGizmoTransformations(gizmoManager.gizmos.scaleGizmo);
 
     // Create ground mesh
@@ -186,33 +195,76 @@ const loadModel = (url, extension) => {
     scene.meshes.filter(mesh => mesh !== ground).forEach(mesh => mesh.dispose());
 
     BABYLON.SceneLoader.Append("", url, scene, () => {
-        scene.meshes.forEach(mesh => {
-            if (mesh !== ground) {
-                mesh.renderingGroupId = 1;
-                mesh.renderingOrder = 0;
-                mesh.hasVertexAlpha = false;
-
-                // Enable vertex colors for loaded meshes
-                if (!mesh.material) {
-                    mesh.material = new BABYLON.StandardMaterial("vertexColorMaterial", scene);
-                }
-                mesh.material.vertexColorsEnabled = true;
-                mesh.material.backFaceCulling = true;
-
-                mesh.actionManager = new BABYLON.ActionManager(scene);
-                mesh.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
-                    if (props.selectedTool === 'gizmo') {
-                        gizmoManager.attachToMesh(mesh);
-                    }
-                }));
-            }
-        });
+        processMeshes(scene, extension);
         console.log(`${extension.toUpperCase()} model loaded`);
     }, null, (message, exception) => {
         console.error(message, exception);
-        errorMessage.value = message;
-        showErrorModal.value = true;
+        errorMessage.value = `Error loading model: ${message}`; // Set errorMessage
+        showErrorModal.value = true; // Show error modal
     }, `.${extension}`);
+};
+
+const processMeshes = (scene, extension) => {
+    scene.meshes.forEach(mesh => {
+        if (mesh !== ground) {
+            mesh.renderingGroupId = 1;
+            mesh.renderingOrder = 0;
+            mesh.hasVertexAlpha = false;
+
+            // Enable vertex colors for loaded meshes
+            if (!mesh.material) {
+                mesh.material = new BABYLON.StandardMaterial("vertexColorMaterial", scene);
+            }
+            mesh.material.vertexColorsEnabled = true;
+            mesh.material.backFaceCulling = true;
+
+            // Unweld vertices for OBJ files
+            if (extension === 'obj') {
+                const vertexData = BABYLON.VertexData.ExtractFromMesh(mesh);
+                const positions = vertexData.positions;
+                const indices = vertexData.indices;
+                const normals = vertexData.normals;
+                const newPositions = [];
+                const newIndices = [];
+                const newNormals = [];
+                const newColors = [];
+
+                for (let i = 0; i < indices.length; i += 3) {
+                    const index1 = indices[i];
+                    const index2 = indices[i + 1];
+                    const index3 = indices[i + 2];
+
+                    const pos1 = [positions[index1 * 3], positions[index1 * 3 + 1], positions[index1 * 3 + 2]];
+                    const pos2 = [positions[index2 * 3], positions[index2 * 3 + 1], positions[index2 * 3 + 2]];
+                    const pos3 = [positions[index3 * 3], positions[index3 * 3 + 1], positions[index3 * 3 + 2]];
+
+                    const norm1 = [normals[index1 * 3], normals[index1 * 3 + 1], normals[index1 * 3 + 2]];
+                    const norm2 = [normals[index2 * 3], normals[index2 * 3 + 1], normals[index2 * 3 + 2]];
+                    const norm3 = [normals[index3 * 3], normals[index3 * 3 + 1], normals[index3 * 3 + 2]];
+
+                    newPositions.push(...pos1, ...pos2, ...pos3);
+                    newNormals.push(...norm1, ...norm2, ...norm3);
+                    newIndices.push(i, i + 1, i + 2);
+
+                    // Initialize colors to white
+                    newColors.push(1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
+                }
+
+                vertexData.positions = newPositions;
+                vertexData.indices = newIndices;
+                vertexData.normals = newNormals;
+                vertexData.colors = newColors;
+                vertexData.applyToMesh(mesh);
+            }
+
+            mesh.actionManager = new BABYLON.ActionManager(scene);
+            mesh.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
+                if (props.selectedTool === 'gizmo') {
+                    gizmoManager.attachToMesh(mesh);
+                }
+            }));
+        }
+    });
 };
 
 const handlePointerMove = () => {
@@ -299,7 +351,7 @@ const handlePointerDown = (event) => {
             if (!colorsData) {
                 colorsData = new Float32Array(vertexData.length / 3 * 4);
                 for (let i = 0; i < vertexData.length / 3; i++) {
-                    colorsData[i * 4] = 1.0; // R
+                    colorsData[i * 4] = 1.0;     // R
                     colorsData[i * 4 + 1] = 1.0; // G
                     colorsData[i * 4 + 2] = 1.0; // B
                     colorsData[i * 4 + 3] = 1.0; // A
@@ -346,6 +398,10 @@ const handlePointerDown = (event) => {
             actionStack.push({ type: 'paint', mesh: pickedMesh, faceIndices, originalColors });
 
             console.log('Face Painted:', faceIndices);
+        }
+    } else {
+        if (props.selectedTool === 'gizmo') {
+            gizmoManager.attachToMesh(null);
         }
     }
 };

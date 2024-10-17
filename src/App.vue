@@ -33,13 +33,13 @@ const errorMessage = ref('');
 const showErrorModal = ref(false);
 
 const settings = reactive({
-  lightIntensity: 0.7,
+  lightIntensity: 0.9,
   cameraRadius: 35.71,
   startX: -15,
   startY: 10,
   backgroundColor: '#242424',
   lightColor: '#ffffff',
-  lightDirectionX: 1,
+  lightDirectionX: 0,
   lightDirectionY: 1,
   lightDirectionZ: 0,
   cameraSpeed: 1,
@@ -152,6 +152,7 @@ const showError = (message) => {
 const updateSelectedTool = (tool) => {
     selectedTool.value = tool;
     graphicsContext.gizmoManager.positionGizmoEnabled = tool === "gizmo";
+    graphicsContext.gizmoManager.rotationGizmoEnabled = tool === "gizmo";
     graphicsContext.gizmoManager.scaleGizmoEnabled = tool === "gizmo";
     console.log(tool);
 };

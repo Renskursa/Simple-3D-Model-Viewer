@@ -2,7 +2,7 @@
     <label for="file-input" class="custom-file-input">
     <div class="file-label-content">
         <img src="@/assets/upload-icon.svg" alt="Upload Icon" class="upload-icon" />
-        <input type="file" id="file-input" class="file-input" @change="handleFileChange" accept=".stl,.obj" />
+        <input type="file" id="file-input" class="file-input" @change="handleFileChange" accept=".stl,.obj,.fbx" />
         <span v-if="selectedFile">Selected file: {{ selectedFile.name }}</span>
         <span v-else>Choose a file...</span>
     </div>
@@ -18,13 +18,14 @@
   
   const handleFileChange = (event) => {
     const file = event.target.files[0];
-    if (file && (file.name.endsWith('.stl') || file.name.endsWith('.obj'))) {
+    const fileName = file.name.toLowerCase();
+    if (file && (fileName.endsWith('.stl') || fileName.endsWith('.obj')) || fileName.endsWith('.fbx')) {
       selectedFile.value = file;
       const reader = new FileReader();
       reader.onload = (event) => {
         const arrayBuffer = event.target.result;
         const url = URL.createObjectURL(new Blob([arrayBuffer]));
-        const extension = file.name.split('.').pop();
+        const extension = file.name.split('.').pop().toLowerCase();
         emit('file-loaded', url, extension);
       };
       reader.readAsArrayBuffer(file);
