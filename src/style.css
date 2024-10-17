@@ -148,8 +148,14 @@ body {
   margin-top: 5px;
 }
 
+.minimize-button:hover {
+  background-color: rgba(255, 255, 255, 0.32);
+  filter: invert(0.5);
+}
+
 .restore-button:hover {
-  background-color: rgba(20, 19, 19, 0.438);
+  background-color: rgba(255, 255, 255, 0.32);
+  filter: invert(0.5);
 }
 
 .custom-file-input {

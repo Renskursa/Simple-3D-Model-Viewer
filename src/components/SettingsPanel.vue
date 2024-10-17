@@ -2,6 +2,11 @@
 import { ref } from 'vue';
 import { defineProps, defineEmits } from 'vue';
 
+import * as BABYLON from '@babylonjs/core';
+import '@babylonjs/loaders/stl';
+import '@babylonjs/loaders/glTF';
+import '@babylonjs/loaders/OBJ';
+
 const props = defineProps({
   settings: Object,
 //actionStack: Array,
@@ -18,7 +23,8 @@ const emit = defineEmits([
   'update-camera-speed',
   'undo-last-action',
   'update-paint-color',
-  'toggle-visibility'
+  'toggle-visibility',
+  'export-model'
 ]);
 
 const showLightSettings = ref(false);
@@ -116,7 +122,7 @@ const updatePaintColor = (event) => {
         <button class="base-button undo-button" @click="undoLastAction">Undo</button>
       </div>
       <div class="setting">
-        <button class="base-button export-button" @click="() => exportModel()">
+        <button class="base-button export-button" @click="$emit('export-model')">
           <img src="@/assets/download-icon.svg" alt="Download Icon" class="download-icon" />
           Export
         </button>

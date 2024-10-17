@@ -2,14 +2,16 @@
   <div id="app">
     <div class="top-right-container">
       <FileUploader @file-loaded="handleFileLoaded" @error="showError" />
+      <ToolRack :selectedTool="selectedTool" @tool-selected="updateSelectedTool" />
       <SettingsPanel :settings="settings"
         @update-background-color="updateBackgroundColor" @update-light-intensity="updateLightIntensity"
         @update-light-direction="updateLightDirection" @update-light-color="updateLightColor"
         @update-camera-speed="updateCameraSpeed" @undo-last-action="undoLastAction"
-        @update-paint-color="updatePaintColor" />
+        @update-paint-color="updatePaintColor" @export-model="exportModel"/>
     </div>
     <BabylonScene ref="canvasRef" :settings="settings" :actionStack="actionStack" :undoLastAction="undoLastAction"
-      :paintColor="paintColor" @context-initialized="onBabylonInit" :fileUrl="fileUrl" :fileExtension="fileExtension" />
+      :paintColor="paintColor" @context-initialized="onBabylonInit" :fileUrl="fileUrl" :fileExtension="fileExtension" 
+      :selectedTool="selectedTool" @tool-changed="updateSelectedTool" />
     <ErrorModal v-if="showErrorModal" :errorMessage="errorMessage" @close="showErrorModal = false" />
   </div>
 </template>
@@ -17,15 +19,14 @@
 <script setup>
 import './style.css';
 import * as BABYLON from '@babylonjs/core';
-import '@babylonjs/loaders/stl';
-import '@babylonjs/loaders/glTF';
-import '@babylonjs/loaders/OBJ';
 import { ref, reactive } from 'vue';
+import { GLTF2Export } from '@babylonjs/serializers/glTF';
 
 import FileUploader from './components/FileUploader.vue';
 import SettingsPanel from './components/SettingsPanel.vue';
 import BabylonScene from './components/BabylonScene.vue';
 import ErrorModal from './components/ErrorModal.vue';
+import ToolRack from './components/ToolRack.vue';
 
 const canvasRef = ref(null);
 const errorMessage = ref('');
@@ -45,6 +46,7 @@ const settings = reactive({
 });
 
 const paintColor = ref('#ff0000');
+const selectedTool = ref('gizmo');
 
 let graphicsContext = {
   scene: null,
@@ -57,24 +59,20 @@ let actionStack = [];
 const fileUrl = ref(null);
 const fileExtension = ref(null);
 
-// Function to handle file loaded event
 const handleFileLoaded = (url, extension) => {
   fileUrl.value = url;
   fileExtension.value = extension;
 };
 
-// Function to handle paint color update
 const updatePaintColor = (color) => {
   paintColor.value = color;
 };
 
-// Function to handle scene initialization
 const onBabylonInit = (initializedContext) => {
   graphicsContext = initializedContext;
   console.log(initializedContext.scene);
 };
 
-// Function to undo the last action
 const undoLastAction = () => {
   if (actionStack.length > 0) {
     const lastAction = actionStack.pop();
@@ -84,7 +82,6 @@ const undoLastAction = () => {
         const { mesh, faceIndices, originalColors } = lastAction;
         const colorsData = mesh.getVerticesData(BABYLON.VertexBuffer.ColorKind);
 
-        // Restore original colors
         faceIndices.forEach((index, i) => {
           colorsData[index * 4] = originalColors[i][0];
           colorsData[index * 4 + 1] = originalColors[i][1];
@@ -106,7 +103,6 @@ const undoLastAction = () => {
   }
 };
 
-// Function to update light intensity
 const updateLightIntensity = (event) => {
   settings.lightIntensity = event.target.value;
   if (graphicsContext.light) {
@@ -114,7 +110,6 @@ const updateLightIntensity = (event) => {
   }
 };
 
-// Function to update background color
 const updateBackgroundColor = (event) => {
   settings.backgroundColor = event.target.value;
   if (graphicsContext.scene) {
@@ -122,7 +117,6 @@ const updateBackgroundColor = (event) => {
   }
 };
 
-// Function to update light direction
 const updateLightDirection = (axis, value) => {
   settings[`lightDirection${axis}`] = value;
   if (graphicsContext.light) {
@@ -134,7 +128,6 @@ const updateLightDirection = (axis, value) => {
   }
 };
 
-// Function to update light color
 const updateLightColor = (event) => {
   settings.lightColor = event.target.value;
   if (graphicsContext.light) {
@@ -142,7 +135,6 @@ const updateLightColor = (event) => {
   }
 };
 
-// Function to update camera speed
 const updateCameraSpeed = (event) => {
   settings.cameraSpeed = event.target.value;
   if (graphicsContext.camera) {
@@ -155,5 +147,34 @@ const updateCameraSpeed = (event) => {
 const showError = (message) => {
   errorMessage.value = message;
   showErrorModal.value = true;
+};
+
+const updateSelectedTool = (tool) => {
+    selectedTool.value = tool;
+    graphicsContext.gizmoManager.positionGizmoEnabled = tool === "gizmo";
+    graphicsContext.gizmoManager.scaleGizmoEnabled = tool === "gizmo";
+    console.log(tool);
+};
+
+const exportModel = (format = 'glb') => {
+    const originalMeshes = graphicsContext.scene.meshes.filter(mesh => !mesh.isHighlightMesh && mesh !== graphicsContext.ground);
+    const exportScene = new BABYLON.Scene(graphicsContext.engine);
+
+    originalMeshes.forEach(mesh => {
+        const vertexData = BABYLON.VertexData.ExtractFromMesh(mesh);
+        const newMesh = new BABYLON.Mesh(mesh.name, exportScene);
+        vertexData.applyToMesh(newMesh);
+        newMesh.material = mesh.material;
+    });
+
+    if (format === 'glb') {
+        const fileName = graphicsContext.selectedFile.value ? graphicsContext.selectedFile.value.name.split('.')[0] : 'exported-model';
+        GLTF2Export.GLBAsync(exportScene, `${fileName}.glb`).then((glb) => {
+            glb.downloadFiles();
+        });
+    } else if (format === 'fbx') {
+        // Add FBX export logic here if available
+        console.log("FBX export is not implemented yet.");
+    }
 };
 </script>

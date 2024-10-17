@@ -18,16 +18,16 @@ const props = defineProps({
     paintColor: String,
     fileUrl: String,
     fileExtension: String,
+    selectedTool: String
 });
 
 const actionStack = props.actionStack;
 
-const emit = defineEmits(['context-initialized']);
+const emit = defineEmits(['context-initialized', 'mode-changed', 'tool-changed']);
 
 const canvasRef = ref(null);
 let engine, scene, camera, light, highlightMaterial, glowLayer, ground, gizmoManager;
 
-const mode = ref('gizmo'); // 'gizmo' or 'paint'
 const selectedFile = ref(null);
 
 let previousHighlightMesh = null;
@@ -53,7 +53,6 @@ const initBabylonJS = () => {
     light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(props.settings.lightDirectionX, props.settings.lightDirectionY, props.settings.lightDirectionZ), scene);
     light.intensity = props.settings.lightIntensity;
     light.diffuse = BABYLON.Color3.FromHexString(props.settings.lightColor);
-
 
     // Initialize materials
     highlightMaterial = new BABYLON.StandardMaterial("highlightMaterial", scene);
@@ -141,6 +140,7 @@ const initBabylonJS = () => {
         light,
         gizmoManager,
         ground,
+        selectedFile,
         highlightMaterial,
         glowLayer,
     }
@@ -201,7 +201,7 @@ const loadModel = (url, extension) => {
 
                 mesh.actionManager = new BABYLON.ActionManager(scene);
                 mesh.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnPickTrigger, () => {
-                    if (mode.value === 'gizmo') {
+                    if (props.selectedTool === 'gizmo') {
                         gizmoManager.attachToMesh(mesh);
                     }
                 }));
@@ -216,7 +216,7 @@ const loadModel = (url, extension) => {
 };
 
 const handlePointerMove = () => {
-    if (mode.value === 'gizmo') {
+    if (props.selectedTool === 'gizmo') {
         return;
     }
 
@@ -290,7 +290,7 @@ const handlePointerDown = (event) => {
         const pickedFaceId = pickResult.faceId;
         console.log('Picked face ID:', pickedFaceId);
 
-        if (mode.value === 'paint') {
+        if (props.selectedTool === 'paint') {
             const indices = pickedMesh.getIndices();
             const vertexData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
             let colorsData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.ColorKind);
@@ -350,42 +350,15 @@ const handlePointerDown = (event) => {
     }
 };
 
-const exportModel = (format = 'glb') => {
-    const originalMeshes = scene.meshes.filter(mesh => !mesh.isHighlightMesh && mesh !== ground);
-    const exportScene = new BABYLON.Scene(engine);
-
-    originalMeshes.forEach(mesh => {
-        const vertexData = BABYLON.VertexData.ExtractFromMesh(mesh);
-        const newMesh = new BABYLON.Mesh(mesh.name, exportScene);
-        vertexData.applyToMesh(newMesh);
-        newMesh.material = mesh.material;
-    });
-
-    if (format === 'glb') {
-        const fileName = selectedFile.value ? selectedFile.value.name.split('.')[0] : 'exported-model';
-        GLTF2Export.GLBAsync(exportScene, `${fileName}.glb`).then((glb) => {
-            glb.downloadFiles();
-        });
-    } else if (format === 'fbx') {
-        // Add FBX export logic here if available
-        console.log("FBX export is not implemented yet.");
-    }
-};
-
 const handleKeyDown = (event) => {
     if (event.key === '1' || event.key === 'q') {
-        mode.value = 'gizmo';
-        gizmoManager.positionGizmoEnabled = true;
-        gizmoManager.scaleGizmoEnabled = true;
-
+        emit('tool-changed', 'gizmo');
         if (previousHighlightMesh) {
             glowLayer.removeIncludedOnlyMesh(previousHighlightMesh);
             previousHighlightMesh.dispose();
         }
     } else if (event.key === '2' || event.key === 'w') {
-        mode.value = 'paint';
-        gizmoManager.positionGizmoEnabled = false;
-        gizmoManager.scaleGizmoEnabled = false;
+        emit('tool-changed', 'paint');
     } else if (event.ctrlKey && event.key === 'z') {
         props.undoLastAction();
     }
