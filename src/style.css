@@ -270,6 +270,32 @@ body {
   background: #5a5e5a;
 }
 
+input[type="color"] {
+  /* Modern styles */
+  border: 3px solid #363636;
+  border-radius: 10px;
+  padding: 1px;
+  cursor: pointer;
+  transition: border-color 0.3s, box-shadow 0.3s, opacity 0.2s;
+  outline: none;
+  opacity: 0.7;
+}
+
+input[type="color"]:hover {
+  opacity: 1;
+  border-color: #888;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 5px;
+}
+
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 5px;
+}
 /* Text Styles */
 .custom-file-input span {
   margin-right: 1px;

@@ -71,18 +71,6 @@ const initBabylonJS = () => {
     gizmoManager.scaleGizmoEnabled = true;
     gizmoManager.gizmos.scaleGizmo.scaleRatio = 1.25;
 
-    const graphicsContext = {
-        engine,
-        scene,
-        camera,
-        light,
-        gizmoManager,
-        ground,
-        highlightMaterial,
-        glowLayer,
-    }
-    emit('context-initialized', graphicsContext);
-
     let initialTransform = null;
 
     // Track gizmo transformations
@@ -145,6 +133,18 @@ const initBabylonJS = () => {
         props.settings.cameraRadius = parseFloat(camera.radius.toFixed(2));
         scene.render();
     });
+
+    const graphicsContext = {
+        engine,
+        scene,
+        camera,
+        light,
+        gizmoManager,
+        ground,
+        highlightMaterial,
+        glowLayer,
+    }
+    emit('context-initialized', graphicsContext);
 
     window.addEventListener('resize', handleResize);
     scene.onPointerMove = handlePointerMove;

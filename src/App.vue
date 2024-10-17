@@ -145,10 +145,10 @@ const updateLightColor = (event) => {
 // Function to update camera speed
 const updateCameraSpeed = (event) => {
   settings.cameraSpeed = event.target.value;
-  if (camera) {
-    camera.wheelPrecision = 50 / settings.cameraSpeed;
-    camera.angularSensibilityX = 1000 / settings.cameraSpeed;
-    camera.angularSensibilityY = 1000 / settings.cameraSpeed;
+  if (graphicsContext.camera) {
+    graphicsContext.camera.wheelPrecision = 50 / settings.cameraSpeed;
+    graphicsContext.camera.angularSensibilityX = 1000 / settings.cameraSpeed;
+    graphicsContext.camera.angularSensibilityY = 1000 / settings.cameraSpeed;
   }
 };
 
