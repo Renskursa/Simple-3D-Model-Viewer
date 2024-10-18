@@ -11,7 +11,7 @@
     </div>
     <BabylonScene ref="canvasRef" :settings="settings" :actionStack="actionStack" :undoLastAction="undoLastAction"
       :paintColor="paintColor" @context-initialized="onBabylonInit" :fileUrl="fileUrl" :fileExtension="fileExtension" 
-      :selectedTool="selectedTool" @tool-changed="updateSelectedTool" />
+      :selectedTool="selectedTool" @tool-changed="updateSelectedTool" @measurement-completed="handleMeasurementCompleted" />
     <ErrorModal v-if="showErrorModal" :errorMessage="errorMessage" @close="showErrorModal = false" />
   </div>
 </template>
@@ -177,5 +177,10 @@ const exportModel = (format = 'glb') => {
         // Add FBX export logic here if available
         console.log("FBX export is not implemented yet.");
     }
+};
+
+const handleMeasurementCompleted = (distance) => {
+  console.log(`Measured distance: ${distance} mm`);
+  // You can add additional logic here to display the distance in the UI or handle it as needed
 };
 </script>

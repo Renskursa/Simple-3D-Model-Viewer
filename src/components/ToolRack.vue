@@ -2,11 +2,11 @@
     <div class="tool-rack">
         <button
             v-for="tool in tools"
-            :key="tool"
-            :class="{ selected: tool === selectedTool }"
-            @click="selectTool(tool)"
+            :key="tool.name"
+            :class="{ selected: tool.name === selectedTool }"
+            @click="selectTool(tool.name)"
         >
-            {{ tool.charAt(0).toUpperCase() + tool.slice(1) }} Tool
+            {{ tool.displayName }}
         </button>
     </div>
 </template>
@@ -22,7 +22,11 @@ export default {
     },
     data() {
         return {
-            tools: ['gizmo', 'paint']
+            tools: [
+                { name: 'gizmo', displayName: 'Gizmo Tool' },
+                { name: 'paint', displayName: 'Paint Tool' },
+                { name: 'measure', displayName: 'Measure Tool' }
+            ]
         };
     },
     methods: {

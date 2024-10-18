@@ -1,11 +1,5 @@
 <script setup>
 import { ref } from 'vue';
-import { defineProps, defineEmits } from 'vue';
-
-import * as BABYLON from '@babylonjs/core';
-import '@babylonjs/loaders/stl';
-import '@babylonjs/loaders/glTF';
-import '@babylonjs/loaders/OBJ';
 
 const props = defineProps({
   settings: Object,

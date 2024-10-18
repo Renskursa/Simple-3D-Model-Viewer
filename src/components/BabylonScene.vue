@@ -10,9 +10,7 @@ import '@babylonjs/loaders/glTF';
 import '@babylonjs/loaders/OBJ';
 import { GridMaterial } from '@babylonjs/materials/grid';
 import exampleModel from '@/assets/example.stl';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import * as GUI from '@babylonjs/gui';
 
 const props = defineProps({
     settings: Object,
@@ -24,13 +22,13 @@ const props = defineProps({
     selectedTool: String
 });
 
+let previousKey = null;
+
 const actionStack = props.actionStack;
 
-const emit = defineEmits(['context-initialized', 'mode-changed', 'tool-changed']);
+const emit = defineEmits(['context-initialized', 'tool-changed', 'measurement-completed']);
 
 const canvasRef = ref(null);
-const errorMessage = ref(''); // Define errorMessage
-const showErrorModal = ref(false); // Define showErrorModal
 
 let engine, scene, camera, light, highlightMaterial, glowLayer, ground, gizmoManager;
 
@@ -40,6 +38,11 @@ let previousHighlightMesh = null;
 let createdFaceMeshes = [];
 
 const MIN_CAMERA_RADIUS = 1.5;
+
+let measurePoints = [];
+let measureLine = null;
+let advancedTexture = null;
+let distanceText = null;
 
 const initBabylonJS = () => {
     // Initialize engine and scene
@@ -197,11 +200,7 @@ const loadModel = (url, extension) => {
     BABYLON.SceneLoader.Append("", url, scene, () => {
         processMeshes(scene, extension);
         console.log(`${extension.toUpperCase()} model loaded`);
-    }, null, (message, exception) => {
-        console.error(message, exception);
-        errorMessage.value = `Error loading model: ${message}`; // Set errorMessage
-        showErrorModal.value = true; // Show error modal
-    }, `.${extension}`);
+    }, null, null, `.${extension}`);
 };
 
 const processMeshes = (scene, extension) => {
@@ -267,8 +266,23 @@ const processMeshes = (scene, extension) => {
     });
 };
 
+const clearMeasureElements = () => {
+    scene.meshes.filter(mesh => mesh.name === "point").forEach(mesh => mesh.dispose());
+    scene.meshes.filter(mesh => mesh.name === "line").forEach(mesh => mesh.dispose());
+    if (advancedTexture) {
+        advancedTexture.dispose();
+        advancedTexture = null;
+    }
+    if (measureLine) {
+        measureLine.dispose();
+        measureLine = null;
+    }
+    measurePoints = [];
+    console.log('Cleared all measure points, lines, and text');
+};
+
 const handlePointerMove = () => {
-    if (props.selectedTool === 'gizmo') {
+    if (props.selectedTool !== 'paint') {
         return;
     }
 
@@ -336,68 +350,125 @@ const handlePointerMove = () => {
 };
 
 const handlePointerDown = (event) => {
+    if (event.button === 1)
+        return;
     const pickResult = scene.pick(scene.pointerX, scene.pointerY, (mesh) => !mesh.isHighlightMesh && mesh !== ground);
     if (pickResult.hit) {
         const pickedMesh = pickResult.pickedMesh;
         const pickedFaceId = pickResult.faceId;
         console.log('Picked face ID:', pickedFaceId);
 
-        if (props.selectedTool === 'paint') {
-            const indices = pickedMesh.getIndices();
-            const vertexData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
-            let colorsData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.ColorKind);
 
-            // Initialize color data if it doesn't exist
-            if (!colorsData) {
-                colorsData = new Float32Array(vertexData.length / 3 * 4);
-                for (let i = 0; i < vertexData.length / 3; i++) {
-                    colorsData[i * 4] = 1.0;     // R
-                    colorsData[i * 4 + 1] = 1.0; // G
-                    colorsData[i * 4 + 2] = 1.0; // B
-                    colorsData[i * 4 + 3] = 1.0; // A
+        switch (props.selectedTool) {
+            case 'paint':
+                const indices = pickedMesh.getIndices();
+                const vertexData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+                let colorsData = pickedMesh.getVerticesData(BABYLON.VertexBuffer.ColorKind);
+
+                // Initialize color data if it doesn't exist
+                if (!colorsData) {
+                    colorsData = new Float32Array(vertexData.length / 3 * 4);
+                    for (let i = 0; i < vertexData.length / 3; i++) {
+                        colorsData[i * 4] = 1.0;     // R
+                        colorsData[i * 4 + 1] = 1.0; // G
+                        colorsData[i * 4 + 2] = 1.0; // B
+                        colorsData[i * 4 + 3] = 1.0; // A
+                    }
                 }
-            }
 
-            const faceIndices = [
-                indices[pickedFaceId * 3],
-                indices[pickedFaceId * 3 + 1],
-                indices[pickedFaceId * 3 + 2]
-            ];
+                const faceIndices = [
+                    indices[pickedFaceId * 3],
+                    indices[pickedFaceId * 3 + 1],
+                    indices[pickedFaceId * 3 + 2]
+                ];
 
-            const paintColorArray = BABYLON.Color3.FromHexString(props.paintColor).asArray().concat([1.0]);
+                const paintColorArray = BABYLON.Color3.FromHexString(props.paintColor).asArray().concat([1.0]);
 
-            // Store original colors before painting
-            const originalColors = faceIndices.map(index => [
-                colorsData[index * 4],
-                colorsData[index * 4 + 1],
-                colorsData[index * 4 + 2],
-                colorsData[index * 4 + 3]
-            ]);
+                // Store original colors before painting
+                const originalColors = faceIndices.map(index => [
+                    colorsData[index * 4],
+                    colorsData[index * 4 + 1],
+                    colorsData[index * 4 + 2],
+                    colorsData[index * 4 + 3]
+                ]);
 
-            if (event.button === 0) { // Left mouse button is pressed
-                // Paint the selected face
-                faceIndices.forEach(index => {
-                    colorsData[index * 4] = paintColorArray[0];
-                    colorsData[index * 4 + 1] = paintColorArray[1];
-                    colorsData[index * 4 + 2] = paintColorArray[2];
-                    colorsData[index * 4 + 3] = paintColorArray[3];
-                });
-            } else if (event.button === 2) { // Right mouse button is pressed
-                // Remove the paint from the selected face (reset to white)
-                faceIndices.forEach(index => {
-                    colorsData[index * 4] = 1.0;
-                    colorsData[index * 4 + 1] = 1.0;
-                    colorsData[index * 4 + 2] = 1.0;
-                    colorsData[index * 4 + 3] = 1.0;
-                });
-            }
+                if (event.button === 0) { // Left mouse button is pressed
+                    // Paint the selected face
+                    faceIndices.forEach(index => {
+                        colorsData[index * 4] = paintColorArray[0];
+                        colorsData[index * 4 + 1] = paintColorArray[1];
+                        colorsData[index * 4 + 2] = paintColorArray[2];
+                        colorsData[index * 4 + 3] = paintColorArray[3];
+                    });
+                } else if (event.button === 2) { // Right mouse button is pressed
+                    // Remove the paint from the selected face (reset to white)
+                    faceIndices.forEach(index => {
+                        colorsData[index * 4] = 1.0;
+                        colorsData[index * 4 + 1] = 1.0;
+                        colorsData[index * 4 + 2] = 1.0;
+                        colorsData[index * 4 + 3] = 1.0;
+                    });
+                }
 
-            pickedMesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colorsData);
+                pickedMesh.setVerticesData(BABYLON.VertexBuffer.ColorKind, colorsData);
 
-            // Push the action to the stack
-            actionStack.push({ type: 'paint', mesh: pickedMesh, faceIndices, originalColors });
+                // Push the action to the stack
+                actionStack.push({ type: 'paint', mesh: pickedMesh, faceIndices, originalColors });
 
-            console.log('Face Painted:', faceIndices);
+                console.log('Face Painted:', faceIndices);
+                break;
+            case 'measure':
+                measurePoints.push(pickResult.pickedPoint.clone());
+                console.log('Picked Point:', pickResult.pickedPoint.clone());
+                if (measurePoints.length > 3) {
+                    measurePoints = measurePoints.slice(1);
+                }
+
+                // Draw measure points
+                if (measurePoints.length === 1) {
+                    const point = BABYLON.MeshBuilder.CreateSphere("point", { diameter: 0.1 }, scene);
+                    point.position = measurePoints[0].add(new BABYLON.Vector3(0, 0, 0));
+                    point.material = new BABYLON.StandardMaterial("pointMaterial", scene);
+                    point.material.diffuseColor = BABYLON.Color3.Red();
+                    point.renderingGroupId = 1;
+                    point.renderingOrder = 0;
+
+                } else if (measurePoints.length === 2) {
+                    const point = BABYLON.MeshBuilder.CreateSphere("point", { diameter: 0.1 }, scene);
+                    point.position = measurePoints[1].add(new BABYLON.Vector3(0, 0, 0));
+                    point.material = new BABYLON.StandardMaterial("pointMaterial", scene);
+                    point.material.diffuseColor = BABYLON.Color3.Red();
+                    point.renderingGroupId = 1;
+                    point.renderingOrder = 0;
+
+                    // Ensure both points are valid before calculating distance
+                    if (measurePoints[0] && measurePoints[1]) {
+                        const distance = BABYLON.Vector3.Distance(measurePoints[0], measurePoints[1]);
+                        measureLine = BABYLON.MeshBuilder.CreateLines("line", { points: measurePoints }, scene);
+                        measureLine.color = BABYLON.Color3.Blue();
+                        measureLine.renderingGroupId = 1;
+                        measureLine.renderingOrder = 0;
+                        console.log('Line Points:', measurePoints);
+
+                        // Optionally, add text to display the distance
+                        distanceText = new GUI.TextBlock();
+                        distanceText.text = `${distance.toFixed(2)} mm`;
+                        distanceText.color = "red";
+                        distanceText.fontSize = 24;
+
+                        advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+                        advancedTexture.addControl(distanceText);
+                        distanceText.linkWithMesh(measureLine);
+                        distanceText.linkOffsetY = -30;
+
+                        emit('measurement-completed', distance);
+                    } else {
+                        console.error('Invalid measure points:', measurePoints);
+                    }
+                } else if (measurePoints.length === 3) {
+                    clearMeasureElements();
+                }
+                break;
         }
     } else {
         if (props.selectedTool === 'gizmo') {
@@ -407,16 +478,25 @@ const handlePointerDown = (event) => {
 };
 
 const handleKeyDown = (event) => {
-    if (event.key === '1' || event.key === 'q') {
-        emit('tool-changed', 'gizmo');
+    if (event.key !== previousKey) {
+        if (measurePoints.length > 0)
+            clearMeasureElements();
+
         if (previousHighlightMesh) {
             glowLayer.removeIncludedOnlyMesh(previousHighlightMesh);
             previousHighlightMesh.dispose();
         }
-    } else if (event.key === '2' || event.key === 'w') {
-        emit('tool-changed', 'paint');
-    } else if (event.ctrlKey && event.key === 'z') {
-        props.undoLastAction();
+
+        if (event.key === '1' || event.key === 'q') {
+            emit('tool-changed', 'gizmo');
+        } else if (event.key === '2' || event.key === 'w') {
+            emit('tool-changed', 'paint');
+        } else if (event.key === '3' || event.key === 'e') {
+            emit('tool-changed', 'measure');
+        } else if (event.ctrlKey && event.key === 'z') {
+            props.undoLastAction();
+        }
     }
+    previousKey = event.key;
 };
 </script>

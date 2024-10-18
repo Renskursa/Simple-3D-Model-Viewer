@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@babylonjs/core": "^7.29.0",
+    "@babylonjs/gui": "^7.30.0",
     "@babylonjs/loaders": "^7.29.0",
     "@babylonjs/materials": "^7.30.0",
     "@babylonjs/serializers": "^7.29.0",
