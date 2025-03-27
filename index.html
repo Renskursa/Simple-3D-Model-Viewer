@@ -1,18 +1,48 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <title>3D Model Viewer</title>
+    <title>3D Model Viewer | Interactive 3D File Viewer</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#000000"/>
-    <meta name="description" content="Every model deserves a face that tells a tale."/>
+    <meta name="theme-color" content="#1a1a2e"/>
+    <meta name="description" content="A modern 3D model viewer for STL, OBJ and FBX files with painting, measuring and transform tools."/>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23e94560' d='M21,16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V7.5C3,7.12 3.21,6.79 3.53,6.62L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.79,6.79 21,7.12 21,7.5V16.5M12,4.15L5,8.09V15.91L12,19.85L19,15.91V8.09L12,4.15Z'/></svg>" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
       html, body {
         overflow: hidden;
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: #1a1a2e;
+      }
+      
+      /* Loading animation */
+      #app:empty {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      
+      #app:empty::before {
+        content: "";
+        width: 40px;
+        height: 40px;
+        border: 3px solid rgba(233, 69, 96, 0.2);
+        border-radius: 50%;
+        border-top-color: #e94560;
+        animation: spin 1s ease-in-out infinite;
+      }
+      
+      @keyframes spin {
+        to { transform: rotate(360deg); }
       }
     </style>
-    <script type="module" crossorigin src="/Simple-3D-Model-Viewer/assets/index-TP0DRMfZ.js"></script>
-    <link rel="stylesheet" crossorigin href="/Simple-3D-Model-Viewer/assets/index-2C_5kT1A.css">
+    <script type="module" crossorigin src="/Simple-3D-Model-Viewer/assets/index-D5r7ITwD.js"></script>
+    <link rel="stylesheet" crossorigin href="/Simple-3D-Model-Viewer/assets/index-DyCF1hr4.css">
   </head>
   <body>
     <div id="app"></div>
